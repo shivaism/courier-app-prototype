@@ -565,23 +565,27 @@ function showDetailFeedback(message, success) {
 
 (async function init() {
   try {
-    if (!getToken()) {
-      // Entry-point simplification: skip the login screen and authenticate silently with
-      // the seeded demo driver so the list view is the very first thing shown.
-      const res = await fetch(`${API_BASE}/auth/driver/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId: "EMP001", password: "driver123" }),
-      });
-      if (!res.ok) throw new Error("auto-login failed");
-      const { token } = await res.json();
-      setToken(token);
-    }
+    // Entry-point simplification: always authenticate silently with the seeded demo driver
+    // instead of trusting a token already in storage — a stale/expired leftover token would
+    // otherwise pass the `getToken()` check, then fail on the first real API call and leave
+    // the screen blank (loadDeliveries() throws before any screen is ever shown).
+    const res = await fetch(`${API_BASE}/auth/driver/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeId: "EMP001", password: "driver123" }),
+    });
+    if (!res.ok) throw new Error("auto-login failed");
+    const { token } = await res.json();
+    setToken(token);
+
     scheduleSessionExpiry();
     await loadDeliveries();
     showScreen(el.listScreen);
     void subscribeToDriverEvents();
-  } catch {
+  } catch (err) {
+    console.error("Driver console failed to load:", err);
     showScreen(el.listScreen);
+    el.listError.textContent = "Could not load deliveries. Please refresh the page.";
+    el.listError.hidden = false;
   }
 })();

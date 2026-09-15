@@ -13,6 +13,13 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute is only `display: none` in the browser's own stylesheet, so any
+   author `display` rule (e.g. `.modal { display: flex }`) silently defeats it, leaving
+   "hidden" dialogs visible on load. Make `hidden` authoritative everywhere. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

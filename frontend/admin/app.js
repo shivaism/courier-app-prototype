@@ -1036,21 +1036,25 @@ async function initApp() {
 
 (async function init() {
   try {
-    if (!getToken()) {
-      // Entry-point simplification: skip the login screen and authenticate silently with
-      // the seeded demo admin so the dashboard is the very first thing shown.
-      const res = await fetch(`${API_BASE}/auth/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: "morgan", password: "admin123" }),
-      });
-      if (!res.ok) throw new Error("auto-login failed");
-      const { token } = await res.json();
-      setToken(token);
-    }
+    // Entry-point simplification: always authenticate silently with the seeded demo admin
+    // instead of trusting a token already in storage — a stale/expired leftover token would
+    // otherwise pass the `getToken()` check, then fail on the first real API call and leave
+    // the screen blank (initApp() throws before the dashboard is ever populated).
+    const res = await fetch(`${API_BASE}/auth/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "morgan", password: "admin123" }),
+    });
+    if (!res.ok) throw new Error("auto-login failed");
+    const { token } = await res.json();
+    setToken(token);
+
     await initApp();
     showAppShell();
-  } catch {
+  } catch (err) {
+    console.error("Admin console failed to load:", err);
     showAppShell();
+    el.dashboardError.textContent = "Could not load the dashboard. Please refresh the page.";
+    el.dashboardError.hidden = false;
   }
 })();

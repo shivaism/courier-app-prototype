@@ -43,6 +43,7 @@ async function main() {
 
   // Static frontend apps, served under their own URL paths.
   app.use("/customer", express.static(path.join(FRONTEND_ROOT, "customer")));
+  app.use("/customer-old", express.static(path.join(FRONTEND_ROOT, "customer-old")));
   app.use("/driver", express.static(path.join(FRONTEND_ROOT, "driver")));
   app.use("/admin", express.static(path.join(FRONTEND_ROOT, "admin")));
 
@@ -59,6 +60,7 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`Delivery Tracking backend listening on http://localhost:${PORT}`);
     console.log(`  Customer app: http://localhost:${PORT}/customer`);
+    console.log(`  Customer app (old): http://localhost:${PORT}/customer-old`);
     console.log(`  Driver app:   http://localhost:${PORT}/driver`);
     console.log(`  Admin app:    http://localhost:${PORT}/admin`);
   });

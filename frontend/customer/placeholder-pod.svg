@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320" role="img" aria-label="Placeholder package photo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2240"/>
+      <stop offset="1" stop-color="#0f1225"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c98a4f"/>
+      <stop offset="1" stop-color="#a9702f"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="320" fill="url(#bg)"/>
+  <!-- simple isometric package -->
+  <g transform="translate(140,80)">
+    <polygon points="100,0 200,50 100,100 0,50" fill="#e0a86a"/>
+    <polygon points="0,50 100,100 100,190 0,140" fill="url(#box)"/>
+    <polygon points="200,50 100,100 100,190 200,140" fill="#8f5c25"/>
+    <polygon points="90,0 110,10 110,60 90,50" fill="#f3d9b1" opacity="0.85"/>
+    <polygon points="90,50 110,60 110,150 90,140" fill="#f3d9b1" opacity="0.6"/>
+  </g>
+  <text x="240" y="255" text-anchor="middle" font-family="system-ui, sans-serif" font-size="17" fill="#9aa3c0">
+    Photo unavailable — demo placeholder
+  </text>
+</svg>

@@ -4,30 +4,14 @@
 const API_BASE = "/api";
 const HISTORY_STORAGE_KEY = "deliveryTracker.recentLookups";
 
-// Local, offline-safe stand-in for a proof-of-delivery photo. Used whenever no photo URL is
-// on file, or when a stored URL fails to actually load (demo data can point at a domain that
-// doesn't serve real images) — the frame should never show the browser's broken-image icon.
-const POD_PLACEHOLDER_SRC = "placeholder-pod.svg";
-
 const STAGE_ORDER = [
-  { key: "intake", label: "Parcel received", timestampField: "intakeAt" },
-  { key: "pickup", label: "Collected from sender", timestampField: "pickupAt" },
-  { key: "line_haul_loaded", label: "In transit between hubs", timestampField: "lineHaulLoadedAt" },
-  { key: "arrived_at_camp", label: "Arrived at local hub", timestampField: "arrivedAtCampAt" },
+  { key: "intake", label: "Intake", timestampField: "intakeAt" },
+  { key: "pickup", label: "Pickup", timestampField: "pickupAt" },
+  { key: "line_haul_loaded", label: "Line-haul loaded", timestampField: "lineHaulLoadedAt" },
+  { key: "arrived_at_camp", label: "Arrived at camp", timestampField: "arrivedAtCampAt" },
   { key: "out_for_delivery", label: "Out for delivery", timestampField: "outForDeliveryAt" },
   { key: "delivered", label: "Delivered", timestampField: "deliveredAt" },
 ];
-
-// Human-facing status wording for the hero headline.
-const STATUS_TEXT = {
-  intake: "Parcel received",
-  pickup: "Collected",
-  line_haul_loaded: "In transit",
-  arrived_at_camp: "At local hub",
-  out_for_delivery: "Out for delivery",
-  delivered: "Delivered",
-  failed: "Delivery attempt failed",
-};
 
 const el = {
   lookupForm: document.getElementById("lookup-form"),
@@ -39,9 +23,8 @@ const el = {
   productName: document.getElementById("product-name"),
   address: document.getElementById("delivery-address"),
   eta: document.getElementById("delivery-eta"),
+  driverNameLabel: document.getElementById("driver-name-label"),
   driverName: document.getElementById("driver-name"),
-  driverTile: document.getElementById("driver-tile"),
-  heroEta: document.getElementById("hero-eta"),
   etaCountdownLabel: document.getElementById("eta-countdown-label"),
   etaCountdownDetail: document.getElementById("eta-countdown-detail"),
   timeline: document.getElementById("timeline"),
@@ -55,9 +38,6 @@ const el = {
   noteFeedback: document.getElementById("note-feedback"),
   noteReadonlyView: document.getElementById("note-readonly-view"),
   noteReadonlyText: document.getElementById("note-readonly-text"),
-  inquiryForm: document.getElementById("inquiry-form"),
-  inquiryMessage: document.getElementById("inquiry-message"),
-  inquiryFeedback: document.getElementById("inquiry-feedback"),
   lookupLoading: document.getElementById("lookup-loading"),
   lookupButton: document.querySelector('#lookup-form button[type="submit"]'),
   connectionStatus: document.getElementById("connection-status"),
@@ -66,29 +46,15 @@ const el = {
   historyEmptyMessage: document.getElementById("history-empty-message"),
 };
 
-// A stored proof-of-delivery URL can point at a domain that doesn't actually serve an image
-// (seen in demo data), which would otherwise show the browser's broken-image icon. Swap to
-// the local placeholder if the real photo fails to load, once, to avoid a retry loop if the
-// placeholder itself is ever unreachable.
-el.podPhoto.addEventListener("error", () => {
-  if (el.podPhoto.src.endsWith(POD_PLACEHOLDER_SRC)) return;
-  el.podPhoto.src = POD_PLACEHOLDER_SRC;
-});
-
 let currentEventSource = null;
 let currentTrackingNumber = null;
 let map = null;
 let vehicleMarker = null;
 let routeLine = null;
-let routeGlow = null;
 let originMarker = null;
 let destinationMarker = null;
 let etaCountdownTimer = null;
 let etaTargetMs = null;
-// Terminal states (delivered/failed) pin a STATIC value into the hero ETA slot. A location
-// snapshot still in flight when the parcel completes must not resurrect the ticking
-// countdown and overwrite "Delivered at …", so terminal rendering latches this flag.
-let heroEtaLocked = false;
 let hasCenteredOnVehicle = false;
 let isFollowingVehicle = false;
 let lastHeading = 0; // accumulated rotation in degrees, not clamped to 0-360 (see shortestRotation)
@@ -251,18 +217,9 @@ async function performLookup(trackingNumber) {
     await refreshMapSnapshot(delivery.trackingNumber, generation);
     if (generation !== lookupGeneration) return;
     subscribeToUpdates(delivery.trackingNumber, generation);
-  } catch (error) {
+  } catch {
     if (generation === lookupGeneration) {
-      // fetch() rejects with TypeError only for genuine transport failures. Anything else
-      // (e.g. a bug thrown while rendering) must NOT be reported as a connection problem —
-      // that sends users off checking their wifi for a fault that is entirely ours. Always
-      // surface the real error to the console so the cause is diagnosable.
-      console.error("Delivery lookup failed:", error);
-      showError(
-        error instanceof TypeError
-          ? "Network error — please check your connection and try again."
-          : "Something went wrong displaying your delivery. Please try again."
-      );
+      showError("Network error — please check your connection and try again.");
     }
   } finally {
     if (generation === lookupGeneration) setLookupBusy(false);
@@ -297,21 +254,28 @@ function hideError() {
 
 function renderDelivery(delivery) {
   el.resultSection.hidden = false;
-  el.statusBadge.textContent = STATUS_TEXT[delivery.status] || delivery.status.replace(/_/g, " ");
+  el.statusBadge.textContent = delivery.status.replace(/_/g, " ");
   el.statusBadge.dataset.status = delivery.status;
   el.trackingDisplay.textContent = delivery.trackingNumber;
   el.productName.textContent = delivery.productName;
   el.address.textContent = delivery.address;
   el.eta.textContent = delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not yet available";
 
-  renderHeroEta(delivery);
+  // Persistent countdown (detail page + live map share one timer/target) — seeded
+  // immediately from the lookup response so it's visible before the map/route even loads.
+  if (delivery.eta && delivery.status !== "delivered" && delivery.status !== "failed") {
+    setEtaCountdownTarget(new Date(delivery.eta).getTime());
+  } else {
+    hideEtaCountdown();
+  }
 
-  // The courier tile is shown/hidden as a whole so the tile grid never leaves a gap.
   if (delivery.driverLastName) {
-    el.driverTile.hidden = false;
+    el.driverNameLabel.hidden = false;
+    el.driverName.hidden = false;
     el.driverName.textContent = delivery.driverLastName;
   } else {
-    el.driverTile.hidden = true;
+    el.driverNameLabel.hidden = true;
+    el.driverName.hidden = true;
   }
 
   renderTimeline(delivery);
@@ -333,10 +297,7 @@ function renderDelivery(delivery) {
       el.podPhoto.src = delivery.proofOfDeliveryPhotoUrl;
       el.podPhoto.hidden = false;
     } else {
-      // No photo on file at all (e.g. older/incomplete demo data) — show a placeholder
-      // rather than hiding the frame, so "Delivered" never looks like it's missing proof.
-      el.podPhoto.src = POD_PLACEHOLDER_SRC;
-      el.podPhoto.hidden = false;
+      el.podPhoto.hidden = true;
     }
   } else {
     el.completionPanel.hidden = true;
@@ -409,14 +370,9 @@ function renderTimeline(delivery) {
 
   if (delivery.status === "failed") {
     const li = document.createElement("li");
-    li.classList.add("current", "timeline-failed");
+    li.classList.add("current");
     li.dataset.testid = "timeline-stage-failed";
-    const label = document.createElement("span");
-    label.textContent = "Delivery attempt failed";
-    const note = document.createElement("span");
-    note.className = "stage-time";
-    note.textContent = "A re-delivery will be scheduled";
-    li.append(label, note);
+    li.textContent = "Delivery Failed — a re-delivery will be scheduled";
     el.timeline.appendChild(li);
   }
 }
@@ -429,9 +385,7 @@ function renderTimeline(delivery) {
 // corners between ticks) rather than a smooth curve through open space, so it reads as
 // moving from one street onto another.
 
-// Dark basemap (CARTO "dark_all", still no API key) so the map integrates with the dark
-// theme instead of glaring against it, and the route/vehicle read as the brightest elements.
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 const TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
@@ -474,24 +428,15 @@ function ensureMap() {
 // direction, so rotating it to match the direction of travel never ends up looking reversed.
 const CAR_SVG = `
 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#c7d2fe"/>
-      <stop offset="0.5" stop-color="#818cf8"/>
-      <stop offset="1" stop-color="#6366f1"/>
-    </linearGradient>
-  </defs>
   <g>
-    <ellipse cx="12" cy="11" rx="8.5" ry="10.5" fill="#6366f1" opacity="0.22"/>
-    <rect x="6.6" y="2" width="10.8" height="16.4" rx="3.6" fill="url(#carBody)" stroke="#1e1b4b" stroke-width="0.7"/>
-    <rect x="8" y="4.1" width="8" height="4.6" rx="1.5" fill="#0b1120" opacity="0.82"/>
-    <rect x="8.4" y="10.4" width="7.2" height="3.4" rx="1.2" fill="#0b1120" opacity="0.5"/>
-    <circle cx="8.4" cy="3.5" r="1.15" fill="#fef9c3"/>
-    <circle cx="15.6" cy="3.5" r="1.15" fill="#fef9c3"/>
-    <rect x="6" y="15.4" width="12" height="2.4" rx="1.1" fill="#0f172a"/>
-    <circle cx="8.4" cy="18.1" r="1.5" fill="#0f172a"/>
-    <circle cx="15.6" cy="18.1" r="1.5" fill="#0f172a"/>
-    <polygon points="12,0.2 9.7,3 14.3,3" fill="#a5b4fc"/>
+    <rect x="7" y="2" width="10" height="16" rx="3" fill="#e11d48" stroke="#7f1d1d" stroke-width="0.6"/>
+    <rect x="8.2" y="4.2" width="7.6" height="5" rx="1.4" fill="#bfe3ff" opacity="0.9"/>
+    <rect x="6" y="14.5" width="12" height="2.6" rx="1" fill="#111827"/>
+    <circle cx="8.5" cy="17.5" r="1.6" fill="#111827"/>
+    <circle cx="15.5" cy="17.5" r="1.6" fill="#111827"/>
+    <circle cx="8.5" cy="4" r="1.4" fill="#111827"/>
+    <circle cx="15.5" cy="4" r="1.4" fill="#111827"/>
+    <polygon points="12,0 9.5,3 14.5,3" fill="#e11d48"/>
   </g>
 </svg>`;
 
@@ -544,45 +489,33 @@ function renderRoute(snapshot) {
 
   if (!routeLine) {
     const linePoints = waypoints.map((p) => [p.lat, p.lng]);
-
-    // Two stacked polylines: a soft wide "glow" beneath a bright core, so the route reads
-    // clearly as the focal element on the dark basemap.
-    routeGlow = L.polyline(linePoints, {
-      color: "#6366f1",
-      weight: 13,
-      opacity: 0.2,
-      lineCap: "round",
-      lineJoin: "round",
-      interactive: false,
-    }).addTo(map);
-
     routeLine = L.polyline(linePoints, {
-      color: "#a5b4fc",
-      weight: 4,
-      opacity: 0.95,
+      color: "#1a73e8",
+      weight: 5,
+      opacity: 0.6,
       lineCap: "round",
       lineJoin: "round",
     }).addTo(map);
 
     originMarker = L.circleMarker([origin.lat, origin.lng], {
-      radius: 6,
-      color: "#ffffff",
-      fillColor: "#10b981",
+      radius: 7,
+      color: "#34a853",
+      fillColor: "#34a853",
       fillOpacity: 1,
       weight: 2,
     })
       .addTo(map)
-      .bindPopup("Departure hub");
+      .bindPopup("Camp (departure point)");
 
     destinationMarker = L.circleMarker([destination.lat, destination.lng], {
-      radius: 6,
-      color: "#ffffff",
-      fillColor: "#f43f5e",
+      radius: 7,
+      color: "#ea4335",
+      fillColor: "#ea4335",
       fillOpacity: 1,
       weight: 2,
     })
       .addTo(map)
-      .bindPopup("Your delivery address");
+      .bindPopup("Delivery destination");
   }
 
   if (!vehicleMarker) {
@@ -637,84 +570,10 @@ function updateEtaAndProgress(snapshot) {
  * delivery," even before the map/route data has loaded.
  */
 function setEtaCountdownTarget(targetMs) {
-  // A parcel that has already completed keeps its static outcome text (see heroEtaLocked).
-  if (heroEtaLocked) return;
   etaTargetMs = targetMs;
-  el.heroEta.dataset.state = "transit";
-  el.etaCountdownLabel.textContent = "Arriving in";
   el.etaCountdownLabel.hidden = false;
   el.etaCountdownDetail.hidden = false;
   tickEtaCountdown();
-}
-
-/**
- * Decides what the hero's headline slot should say for the delivery's current state. The
- * slot is the most prominent number on the page, so it must always carry the single most
- * useful fact: a live countdown in transit, the actual delivery time once delivered, and
- * the next step after a failed attempt — never an empty "Arriving in" with no value.
- */
-function renderHeroEta(delivery) {
-  if (delivery.status === "delivered") {
-    pinHeroEta("delivered", "Delivered at", formatDeliveredAt(delivery.deliveredAt));
-    return;
-  }
-
-  if (delivery.status === "failed") {
-    pinHeroEta("failed", "Next step", "Re-delivery");
-    return;
-  }
-
-  // Non-terminal: release the latch so live snapshots can drive the countdown again.
-  heroEtaLocked = false;
-
-  if (delivery.eta) {
-    setEtaCountdownTarget(new Date(delivery.eta).getTime());
-  } else {
-    hideEtaCountdown();
-  }
-}
-
-/**
- * Shows a fixed (non-ticking) value in the hero slot and stops the countdown so nothing can
- * overwrite it a second later.
- */
-function pinHeroEta(state, labelText, valueText) {
-  stopEtaCountdown();
-  heroEtaLocked = true;
-  el.heroEta.dataset.state = state;
-  el.etaCountdownLabel.textContent = labelText;
-  el.etaCountdownDetail.textContent = valueText;
-  el.etaCountdownLabel.hidden = false;
-  el.etaCountdownDetail.hidden = false;
-}
-
-/**
- * Halts the countdown without hiding the slot. Clearing etaTargetMs matters as much as
- * clearing the interval: tickEtaCountdown's render closure bails on a null target, so any
- * already-queued tick can't repaint over pinned text.
- */
-function stopEtaCountdown() {
-  etaTargetMs = null;
-  if (etaCountdownTimer) {
-    clearInterval(etaCountdownTimer);
-    etaCountdownTimer = null;
-  }
-}
-
-/**
- * Delivery time for the hero slot: just the clock time when it happened today (the common
- * case), with a short date prepended otherwise so "2:41 PM" is never ambiguous.
- */
-function formatDeliveredAt(deliveredAt) {
-  if (!deliveredAt) return "Confirmed";
-  const when = new Date(deliveredAt);
-  if (Number.isNaN(when.getTime())) return "Confirmed";
-
-  const time = when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (when.toDateString() === new Date().toDateString()) return time;
-
-  const date = when.toLocaleDateString([], { month: "short", day: "numeric" });
-  return `${date}, ${time}`;
 }
 
 /**
@@ -728,11 +587,13 @@ function etaDisplayState(remainingSeconds) {
 }
 
 function hideEtaCountdown() {
-  stopEtaCountdown();
-  heroEtaLocked = false;
-  delete el.heroEta.dataset.state;
+  etaTargetMs = null;
   el.etaCountdownLabel.hidden = true;
   el.etaCountdownDetail.hidden = true;
+  if (etaCountdownTimer) {
+    clearInterval(etaCountdownTimer);
+    etaCountdownTimer = null;
+  }
 }
 
 function tickEtaCountdown() {
@@ -814,13 +675,9 @@ function resetMapForNewLookup() {
   }
   vehicleMarker = null;
   routeLine = null;
-  routeGlow = null;
   originMarker = null;
   destinationMarker = null;
-  stopEtaCountdown();
-  // Release the terminal-state latch so looking up a delivered parcel and then an in-transit
-  // one doesn't leave the second stuck on the first one's "Delivered at" text.
-  heroEtaLocked = false;
+  etaTargetMs = null;
   lastHeading = 0;
 }
 
@@ -956,41 +813,6 @@ function showNoteFeedback(message, success) {
   el.noteFeedback.textContent = message;
   el.noteFeedback.style.color = success ? "#16a34a" : "#dc2626";
   el.noteFeedback.hidden = false;
-}
-
-// --- Customer inquiry console: quick message to ops, tied to the current tracking number ---
-
-el.inquiryForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!currentTrackingNumber) return;
-
-  const message = el.inquiryMessage.value.trim();
-  if (!message) return;
-
-  try {
-    const res = await fetch(`${API_BASE}/inquiries`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trackingNumber: currentTrackingNumber, message }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      showInquiryFeedback(body.error || "Could not send message.", false);
-      return;
-    }
-
-    el.inquiryMessage.value = "";
-    showInquiryFeedback("Message sent — our team will follow up.", true);
-  } catch {
-    showInquiryFeedback("Network error — could not send message.", false);
-  }
-});
-
-function showInquiryFeedback(message, success) {
-  el.inquiryFeedback.textContent = message;
-  el.inquiryFeedback.style.color = success ? "#16a34a" : "#dc2626";
-  el.inquiryFeedback.hidden = false;
 }
 
 // --- Init ---

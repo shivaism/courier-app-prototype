@@ -94,7 +94,13 @@ export class SeedService {
     this.delivery.updateStatus(d4.id, "out_for_delivery", "system");
     this.delivery.completeDelivery(
       d4.id,
-      { receiptMethod: "at_door", proofOfDeliveryPhotoUrl: "https://example.com/photos/pod-d4.jpg" },
+      // example.com doesn't serve an actual image, so this rendered as a broken-image icon
+      // on the customer app. Point seed data at the bundled local placeholder instead (also
+      // used by the customer app itself as a fallback for any proof URL that fails to load).
+      {
+        receiptMethod: "at_door",
+        proofOfDeliveryPhotoUrl: `http://localhost:${process.env.PORT ?? 3000}/customer/placeholder-pod.svg`,
+      },
       "driver:EMP002"
     );
 
