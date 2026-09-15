@@ -1,0 +1,32 @@
+{
+  "name": "delivery-tracking-backend",
+  "version": "1.0.0",
+  "description": "Backend API + SSE service for the Delivery Tracking & Driver Console",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bcrypt": "5.1.1",
+    "better-sqlite3": "11.3.0",
+    "express": "4.21.1",
+    "jsonwebtoken": "9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "5.0.2",
+    "@types/better-sqlite3": "7.6.11",
+    "@types/express": "4.17.21",
+    "@types/jsonwebtoken": "9.0.7",
+    "@types/node": "22.7.5",
+    "@types/supertest": "6.0.2",
+    "supertest": "7.0.0",
+    "tsx": "4.19.1",
+    "typescript": "5.6.3",
+    "vitest": "2.1.2"
+  }
+}

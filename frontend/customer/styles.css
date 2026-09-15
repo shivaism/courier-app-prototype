@@ -1,0 +1,468 @@
+:root {
+  --color-primary: #2563eb;
+  --color-success: #16a34a;
+  --color-warning: #ea580c;
+  --color-danger: #dc2626;
+  --color-muted: #6b7280;
+  --color-bg: #f9fafb;
+  --color-border: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: #111827;
+}
+
+.app-header {
+  background: var(--color-primary);
+  color: white;
+  padding: 1rem 1.5rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.lookup-section {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.lookup-section label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.lookup-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lookup-row input {
+  flex: 1;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+button {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.error-message {
+  color: var(--color-danger);
+  margin-top: 0.75rem;
+}
+
+.info-message {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.feedback-message {
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.result-section {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1rem;
+  background: var(--color-muted);
+  color: white;
+  text-transform: capitalize;
+}
+
+.status-badge[data-status="delivered"] {
+  background: var(--color-success);
+}
+
+.status-badge[data-status="failed"] {
+  background: var(--color-danger);
+}
+
+.status-badge[data-status="out_for_delivery"] {
+  background: var(--color-warning);
+}
+
+.delivery-summary {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.delivery-summary dt {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.delivery-summary dd {
+  margin: 0;
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem;
+}
+
+.timeline li {
+  padding: 0.75rem 0 0.75rem 1.5rem;
+  border-left: 3px solid var(--color-border);
+  position: relative;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 1rem;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.timeline li.completed {
+  border-left-color: var(--color-success);
+}
+
+.timeline li.completed::before {
+  background: var(--color-success);
+}
+
+.timeline li.current {
+  border-left-color: var(--color-primary);
+  font-weight: 700;
+}
+
+.timeline li.current::before {
+  background: var(--color-primary);
+  width: 15px;
+  height: 15px;
+  left: -9px;
+}
+
+.timeline .stage-time {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  font-weight: normal;
+}
+
+/* --- Inline live tracking map (shown automatically on the tracking page, no click needed) --- */
+
+.live-map-section {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+
+.live-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.live-map-header h2 {
+  margin: 0;
+}
+
+.live-map-canvas {
+  width: 100%;
+  height: 320px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e8eaed; /* Google-Maps-ish neutral background while tiles load */
+  margin-bottom: 1rem;
+}
+
+.live-map-eta-card {
+  background: #eef4fd;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.live-map-eta-label {
+  font-size: 0.7rem;
+  color: var(--color-muted);
+}
+
+.live-map-eta-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1a73e8;
+}
+
+.live-map-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #e8eaed;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.live-map-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1a73e8, #34a853);
+  border-radius: 999px;
+  transition: width 1.1s linear;
+}
+
+.live-map-driver-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.live-map-driver-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fce4ec, #e1bee7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.live-map-driver-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.live-map-driver-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.live-map-driver-sub {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.live-map-product-chip {
+  background: var(--color-bg);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sponsored ad card — intentionally distinct styling and an explicit "Sponsored" badge so
+   it's never mistaken for the driver's own identity/info. */
+.live-map-ad-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(90deg, #fff3e0, #ffe0b2);
+  border: 1px solid #ffcc80;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  color: #4a3200;
+  position: relative;
+}
+
+.live-map-ad-card:hover {
+  filter: brightness(1.02);
+}
+
+.live-map-ad-badge {
+  position: absolute;
+  top: -0.55rem;
+  left: 0.75rem;
+  background: #fb8c00;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.live-map-ad-emoji {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.live-map-ad-text {
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.live-map-ad-cta {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #fb8c00;
+  white-space: nowrap;
+}
+
+/* Vehicle marker — sleek sports car, glides between ticks and snaps heading at corners.
+   Leaflet positions the OUTER icon wrapper via an inline transform: translate3d(...);
+   we animate that transform here so successive SSE position ticks glide rather than jump.
+   The INNER .vehicle-marker div carries a separate rotate() transform for heading, which
+   Leaflet does not touch, so its own transition can animate independently. */
+.vehicle-icon-wrapper {
+  transition: transform 1.05s linear;
+}
+
+.vehicle-marker {
+  font-size: 30px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4));
+  transition: transform 0.6s ease-out;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* Clean, Google-Maps-like popup styling (used on both the inline and full-screen maps) */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+
+.leaflet-popup-content {
+  margin: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.completion-panel {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.completion-panel img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin-top: 0.5rem;
+}
+
+#note-form label {
+  display: block;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+
+#note-form select,
+#note-form textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+#note-form button {
+  margin-top: 0.75rem;
+}
+
+.history-section {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-list li {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-list li:hover {
+  background: var(--color-bg);
+}
+
+.history-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-muted);
+  color: white;
+}
+
+.history-badge.completed {
+  background: var(--color-success);
+}

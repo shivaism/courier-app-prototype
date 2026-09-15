@@ -1,0 +1,295 @@
+:root {
+  --color-primary: #2563eb;
+  --color-success: #16a34a;
+  --color-warning: #ea580c;
+  --color-danger: #dc2626;
+  --color-muted: #6b7280;
+  --color-bg: #f9fafb;
+  --color-border: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: #111827;
+  /* Mobile-first: constrain width, center on larger screens */
+}
+
+.screen {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+/* --- Login --- */
+
+.login-card {
+  padding-top: 3rem;
+  text-align: center;
+}
+
+.login-card h1 {
+  margin-bottom: 2rem;
+}
+
+#login-form {
+  text-align: left;
+}
+
+#login-form label {
+  display: block;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+#login-form input {
+  width: 100%;
+  padding: 0.9rem;
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  min-height: 44px;
+}
+
+button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary-button {
+  background: white;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.danger-button {
+  background: var(--color-danger);
+}
+
+#login-form button {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+.error-message {
+  color: var(--color-danger);
+  margin-top: 0.75rem;
+}
+
+.info-message {
+  color: var(--color-muted);
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.feedback-message {
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+/* --- List screen --- */
+
+.list-header {
+  position: sticky;
+  top: 0;
+  background: var(--color-primary);
+  color: white;
+  padding: 1rem;
+  margin: -1rem -1rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+.list-header .secondary-button {
+  background: transparent;
+  color: white;
+  border: 1px solid white;
+  min-height: 36px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.filter-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  padding-bottom: 0.25rem;
+}
+
+.filter-button {
+  background: white;
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.filter-button.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.delivery-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.delivery-list li {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.delivery-list li:active {
+  background: var(--color-bg);
+}
+
+.delivery-item-title {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.delivery-item-address {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.status-chip {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--color-muted);
+  color: white;
+  text-transform: capitalize;
+}
+
+.status-chip[data-status="delivered"] {
+  background: var(--color-success);
+}
+
+.status-chip[data-status="failed"] {
+  background: var(--color-danger);
+}
+
+.status-chip[data-status="out_for_delivery"] {
+  background: var(--color-warning);
+}
+
+/* --- Detail screen --- */
+
+.detail-header {
+  margin: -1rem -1rem 1rem;
+  padding: 1rem;
+}
+
+.detail-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.redelivery-badge {
+  display: inline-block;
+  background: var(--color-danger);
+  color: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* --- Modal --- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 420px;
+}
+
+.modal-content label {
+  display: block;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.modal-content select,
+.modal-content input,
+.modal-content textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  min-height: 44px;
+}
+
+.confirm-text {
+  margin-top: 1rem;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.modal-actions button {
+  flex: 1;
+}

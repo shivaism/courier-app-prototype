@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Your Delivery</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>📦 Delivery Tracker</h1>
+  </header>
+
+  <main class="container">
+    <!-- CUST-1: Lookup form, primary element at top of page -->
+    <section class="lookup-section" aria-label="Delivery lookup">
+      <form id="lookup-form" data-testid="lookup-form">
+        <label for="tracking-number-input">Tracking Number</label>
+        <div class="lookup-row">
+          <input
+            type="text"
+            id="tracking-number-input"
+            data-testid="lookup-tracking-number-input"
+            placeholder="e.g. DT-7F3K9QX2"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" data-testid="lookup-submit-button">Track</button>
+        </div>
+      </form>
+      <p id="lookup-error" class="error-message" data-testid="lookup-error-message" hidden></p>
+    </section>
+
+    <!-- Result panel (populated after a successful lookup) -->
+    <section id="result-section" class="result-section" data-testid="delivery-result-section" hidden>
+      <div class="status-badge-row">
+        <span id="status-badge" class="status-badge" data-testid="delivery-status-badge">—</span>
+        <span id="tracking-number-display" data-testid="delivery-tracking-number-display"></span>
+      </div>
+
+      <dl class="delivery-summary">
+        <dt>Product</dt>
+        <dd id="product-name" data-testid="delivery-product-name"></dd>
+        <dt>Delivery Address</dt>
+        <dd id="delivery-address" data-testid="delivery-address"></dd>
+        <dt>Estimated Arrival</dt>
+        <dd id="delivery-eta" data-testid="delivery-eta"></dd>
+        <dt id="eta-countdown-label" hidden>Arriving In</dt>
+        <dd id="eta-countdown-detail" class="eta-countdown-detail" data-testid="eta-countdown-detail" hidden></dd>
+        <dt id="driver-name-label" hidden>Driver</dt>
+        <dd id="driver-name" data-testid="delivery-driver-name" hidden></dd>
+      </dl>
+
+      <!-- Optional extension: inline live tracking map (shown automatically, no click needed) -->
+      <div id="live-map-section" class="live-map-section" data-testid="live-map-section" hidden>
+        <div class="live-map-header">
+          <h2>Live Tracking</h2>
+          <div class="live-map-eta-card" data-testid="live-map-eta-card">
+            <span class="live-map-eta-label">Arriving in</span>
+            <span id="live-map-eta-countdown" class="live-map-eta-value" data-testid="live-map-eta-countdown">--</span>
+          </div>
+        </div>
+
+        <div id="live-map-canvas" class="live-map-canvas" data-testid="live-map-canvas"></div>
+
+        <div class="live-map-progress-track">
+          <div id="live-map-progress-fill" class="live-map-progress-fill" data-testid="live-map-progress-fill"></div>
+        </div>
+
+        <div class="live-map-driver-row" data-testid="live-map-driver-row">
+          <div id="live-map-driver-avatar" class="live-map-driver-avatar" data-testid="live-map-driver-avatar">🧑‍🚀</div>
+          <div class="live-map-driver-info">
+            <span id="live-map-driver-name" class="live-map-driver-name" data-testid="live-map-driver-name">Your driver</span>
+            <span id="live-map-driver-sub" class="live-map-driver-sub" data-testid="live-map-driver-sub">On the way to you</span>
+          </div>
+          <div class="live-map-product-chip" data-testid="live-map-product-chip">
+            <span id="live-map-product-name" data-testid="live-map-product-name"></span>
+          </div>
+        </div>
+
+        <!-- Explicitly labeled, separate ad unit — NOT disguised as the driver's identity.
+             Sits in normal document flow (not an absolutely-positioned overlay), so it is
+             always visible regardless of map zoom/pan state. -->
+        <a
+          id="live-map-ad-card"
+          class="live-map-ad-card"
+          data-testid="live-map-ad-card"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+        >
+          <span class="live-map-ad-badge">Sponsored</span>
+          <span class="live-map-ad-emoji" aria-hidden="true">🎤</span>
+          <span class="live-map-ad-text">
+            <strong>Live in Concert</strong> — Tickets on sale now
+          </span>
+          <span class="live-map-ad-cta">Get Tickets →</span>
+        </a>
+      </div>
+
+      <!-- CUST-2: Status timeline -->
+      <h2>Delivery Progress</h2>
+      <ol id="timeline" class="timeline" data-testid="delivery-timeline"></ol>
+
+      <!-- Shown only when status = delivered -->
+      <div id="completion-panel" class="completion-panel" data-testid="delivery-completion-panel" hidden>
+        <h2>Delivered</h2>
+        <p><strong>Completed at:</strong> <span id="completion-time" data-testid="completion-time"></span></p>
+        <p><strong>Receipt method:</strong> <span id="receipt-method" data-testid="receipt-method"></span></p>
+        <img id="pod-photo" data-testid="proof-of-delivery-photo" alt="Proof of delivery photo" hidden />
+      </div>
+
+      <!-- CUST-3: Request note -->
+      <h2>Delivery Instructions</h2>
+      <form id="note-form" data-testid="request-note-form">
+        <label for="note-select">Quick note</label>
+        <select id="note-select" data-testid="request-note-select">
+          <option value="">— Select a preset —</option>
+          <option value="Leave at the door and ring the bell">Leave at the door and ring the bell</option>
+          <option value="Leave with security desk">Leave with security desk</option>
+          <option value="Call if absent">Call if absent</option>
+        </select>
+        <label for="note-textarea">Or write your own</label>
+        <textarea
+          id="note-textarea"
+          data-testid="request-note-textarea"
+          rows="3"
+          placeholder="e.g. Please leave with the front desk"
+        ></textarea>
+        <button type="submit" data-testid="request-note-save-button">Save Note</button>
+        <p id="note-locked-message" class="info-message" data-testid="request-note-locked-message" hidden>
+          Delivery is already out — note can no longer be changed.
+        </p>
+        <p id="note-feedback" class="feedback-message" data-testid="request-note-feedback" hidden></p>
+      </form>
+    </section>
+
+    <!-- CUST-4: Recent lookups history -->
+    <section class="history-section" aria-label="Recent lookups">
+      <h2>Recent Lookups</h2>
+      <ul id="history-list" class="history-list" data-testid="recent-lookups-list"></ul>
+      <p id="history-empty-message" class="info-message" data-testid="recent-lookups-empty-message">
+        No recent lookups yet.
+      </p>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

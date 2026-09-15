@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Driver Console</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- DRV-1: Login screen -->
+  <section id="login-screen" class="screen" data-testid="login-screen">
+    <div class="login-card">
+      <h1>🚚 Driver Console</h1>
+      <form id="login-form" data-testid="login-form">
+        <label for="employee-id-input">Employee ID</label>
+        <input type="text" id="employee-id-input" data-testid="login-employee-id-input" autocomplete="username" required />
+
+        <label for="password-input">Password</label>
+        <input type="password" id="password-input" data-testid="login-password-input" autocomplete="current-password" required />
+
+        <button type="submit" data-testid="login-submit-button">Log In</button>
+        <p id="login-error" class="error-message" data-testid="login-error-message" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- DRV-2: Delivery list screen -->
+  <section id="list-screen" class="screen" data-testid="list-screen" hidden>
+    <header class="list-header" data-testid="remaining-count-header">
+      <span id="remaining-count" data-testid="remaining-count-label">0 deliveries remaining</span>
+      <button id="logout-button" data-testid="logout-button" class="secondary-button">Log Out</button>
+    </header>
+
+    <div class="filter-row" data-testid="status-filter-row">
+      <button class="filter-button active" data-status="" data-testid="filter-all-button">All</button>
+      <button class="filter-button" data-status="intake,pickup,line_haul_loaded,arrived_at_camp" data-testid="filter-pending-button">Pending</button>
+      <button class="filter-button" data-status="out_for_delivery" data-testid="filter-in-transit-button">In Transit</button>
+      <button class="filter-button" data-status="delivered" data-testid="filter-delivered-button">Delivered</button>
+      <button class="filter-button" data-status="failed" data-testid="filter-failed-button">Failed</button>
+    </div>
+
+    <ul id="delivery-list" class="delivery-list" data-testid="delivery-list"></ul>
+    <p id="list-empty-message" class="info-message" data-testid="list-empty-message" hidden>No deliveries match this filter.</p>
+  </section>
+
+  <!-- Delivery detail screen -->
+  <section id="detail-screen" class="screen" data-testid="detail-screen" hidden>
+    <header class="detail-header">
+      <button id="back-button" data-testid="back-button" class="secondary-button">← Back</button>
+    </header>
+
+    <div class="detail-card">
+      <h2 id="detail-product-name" data-testid="detail-product-name"></h2>
+      <p id="detail-tracking-number" data-testid="detail-tracking-number" class="muted"></p>
+      <p><strong>Address:</strong> <span id="detail-address" data-testid="detail-address"></span></p>
+      <p><strong>Note:</strong> <span id="detail-note" data-testid="detail-note"></span></p>
+      <p><strong>Status:</strong> <span id="detail-status" data-testid="detail-status"></span></p>
+
+      <div id="redelivery-badge" class="redelivery-badge" data-testid="redelivery-badge" hidden>
+        Re-delivery target
+      </div>
+
+      <div class="action-row">
+        <button id="advance-status-button" data-testid="advance-status-button">Advance Status</button>
+        <button id="fail-button" data-testid="fail-delivery-button" class="danger-button">Delivery Failed</button>
+      </div>
+      <p id="detail-feedback" class="feedback-message" data-testid="detail-feedback-message" hidden></p>
+    </div>
+  </section>
+
+  <!-- DRV-3: Completion modal -->
+  <div id="complete-modal" class="modal" data-testid="complete-modal" hidden>
+    <div class="modal-content">
+      <h2>Complete Delivery</h2>
+      <form id="complete-form" data-testid="complete-form">
+        <label for="receipt-method-select">Receipt method</label>
+        <select id="receipt-method-select" data-testid="receipt-method-select" required>
+          <option value="">— Select —</option>
+          <option value="in_person">In person</option>
+          <option value="at_door">At door</option>
+          <option value="security_desk">Security desk</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="photo-url-input">Proof of delivery photo URL</label>
+        <input type="url" id="photo-url-input" data-testid="photo-url-input" placeholder="https://..." required />
+
+        <div class="modal-actions">
+          <button type="button" id="complete-cancel-button" data-testid="complete-cancel-button" class="secondary-button">Cancel</button>
+          <button type="submit" data-testid="complete-submit-button">Confirm Delivered</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DRV-4: Failure modal -->
+  <div id="fail-modal" class="modal" data-testid="fail-modal" hidden>
+    <div class="modal-content">
+      <h2>Report Delivery Failure</h2>
+      <form id="fail-form" data-testid="fail-form">
+        <label for="failure-reason-select">Reason</label>
+        <select id="failure-reason-select" data-testid="failure-reason-select" required>
+          <option value="">— Select —</option>
+          <option value="recipient_absent">Recipient absent</option>
+          <option value="bad_address">Bad address</option>
+          <option value="receipt_refused">Receipt refused</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="failure-memo-input">Memo (optional)</label>
+        <textarea id="failure-memo-input" data-testid="failure-memo-input" rows="2"></textarea>
+
+        <p class="confirm-text">Are you sure? This will mark the delivery as a re-delivery target.</p>
+
+        <div class="modal-actions">
+          <button type="button" id="fail-cancel-button" data-testid="fail-cancel-button" class="secondary-button">Cancel</button>
+          <button type="submit" data-testid="fail-submit-button" class="danger-button">Confirm Failure</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
