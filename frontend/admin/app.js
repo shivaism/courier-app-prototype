@@ -30,6 +30,7 @@ const el = {
     assignment: document.getElementById("assignment-tab"),
     masterdata: document.getElementById("masterdata-tab"),
     history: document.getElementById("history-tab"),
+    inquiries: document.getElementById("inquiries-tab"),
   },
 
   // Dashboard
@@ -68,6 +69,13 @@ const el = {
   historyDriverFilter: document.getElementById("history-driver-filter"),
   historyFilterButton: document.getElementById("history-filter-button"),
   historyList: document.getElementById("history-list"),
+
+  // Inquiries
+  inquiriesStatusFilter: document.getElementById("inquiries-status-filter"),
+  inquiriesLoading: document.getElementById("inquiries-loading"),
+  inquiriesError: document.getElementById("inquiries-error"),
+  inquiriesEmpty: document.getElementById("inquiries-empty"),
+  inquiriesList: document.getElementById("inquiries-list"),
 
   // Modals
   historyModal: document.getElementById("history-modal"),
@@ -240,6 +248,7 @@ el.tabBar.addEventListener("click", (e) => {
 
   if (tabName === "assignment") void loadUnassigned();
   if (tabName === "history") void loadHistory();
+  if (tabName === "inquiries") void loadInquiries();
   if (tabName === "masterdata") void loadMasterData();
 });
 
@@ -458,6 +467,7 @@ async function refreshActiveTab({ silent = false } = {}) {
   if (!el.tabs.dashboard.hidden) await loadDashboard({ silent });
   if (!el.tabs.assignment.hidden) await loadUnassigned();
   if (!el.tabs.history.hidden) await loadHistory({ silent });
+  if (!el.tabs.inquiries.hidden) await loadInquiries({ silent });
 }
 
 // --- ADM-3: Assignment ---
@@ -918,6 +928,104 @@ el.newDeliveryForm.addEventListener("submit", async (e) => {
   }
 });
 
+// --- Customer inquiries console ---
+
+async function loadInquiries({ silent = false } = {}) {
+  if (!silent) {
+    el.inquiriesLoading.hidden = false;
+    el.inquiriesError.hidden = true;
+  }
+  try {
+    const status = el.inquiriesStatusFilter.value;
+    const res = await apiFetch(`/admin/inquiries${status ? `?status=${status}` : ""}`);
+    if (!res.ok) throw new Error("Failed to load inquiries");
+    const inquiries = await res.json();
+    renderInquiries(inquiries);
+  } catch (err) {
+    if (!silent) el.inquiriesError.textContent = err.message || "Could not load inquiries.";
+    if (!silent) el.inquiriesError.hidden = false;
+  } finally {
+    if (!silent) el.inquiriesLoading.hidden = true;
+  }
+}
+
+function renderInquiries(inquiries) {
+  el.inquiriesList.innerHTML = "";
+  el.inquiriesEmpty.hidden = inquiries.length > 0;
+
+  for (const inquiry of inquiries) {
+    const li = document.createElement("li");
+    li.className = "inquiry-item";
+    li.dataset.testid = `inquiry-item-${inquiry.id}`;
+
+    const header = document.createElement("div");
+    header.className = "inquiry-item-header";
+    const tracking = document.createElement("strong");
+    tracking.textContent = inquiry.trackingNumber;
+    const status = document.createElement("span");
+    status.className = "status-chip";
+    status.dataset.status = inquiry.status;
+    status.textContent = inquiry.status === "open" ? "Open" : "Resolved";
+    const timestamp = document.createElement("span");
+    timestamp.className = "muted";
+    timestamp.textContent = formatTimestamp(inquiry.createdAt);
+    header.append(tracking, status, timestamp);
+
+    const message = document.createElement("p");
+    message.className = "inquiry-message";
+    message.textContent = inquiry.message;
+
+    li.append(header, message);
+
+    if (inquiry.status === "resolved") {
+      const reply = document.createElement("p");
+      reply.className = "inquiry-reply";
+      reply.textContent = `Reply: ${inquiry.reply}`;
+      li.appendChild(reply);
+    } else {
+      const replyForm = document.createElement("form");
+      replyForm.className = "inquiry-reply-form";
+
+      const replyInput = document.createElement("textarea");
+      replyInput.rows = 2;
+      replyInput.placeholder = "Type a reply to resolve this inquiry…";
+      replyInput.dataset.testid = `inquiry-reply-input-${inquiry.id}`;
+      replyInput.required = true;
+
+      const replyButton = document.createElement("button");
+      replyButton.type = "submit";
+      replyButton.textContent = "Send & resolve";
+      replyButton.dataset.testid = `inquiry-resolve-button-${inquiry.id}`;
+
+      replyForm.append(replyInput, replyButton);
+      replyForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const reply = replyInput.value.trim();
+        if (!reply) return;
+        replyButton.disabled = true;
+        try {
+          const res = await apiFetch(`/admin/inquiries/${inquiry.id}/resolve`, {
+            method: "POST",
+            body: JSON.stringify({ reply }),
+          });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not resolve inquiry.");
+          await loadInquiries();
+        } catch (err) {
+          replyButton.disabled = false;
+          el.inquiriesError.textContent = err.message;
+          el.inquiriesError.hidden = false;
+        }
+      });
+
+      li.appendChild(replyForm);
+    }
+
+    el.inquiriesList.appendChild(li);
+  }
+}
+
+el.inquiriesStatusFilter.addEventListener("change", () => loadInquiries());
+
 // --- Init ---
 
 async function initApp() {
@@ -927,14 +1035,22 @@ async function initApp() {
 }
 
 (async function init() {
-  if (getToken()) {
-    try {
-      await initApp();
-      showAppShell();
-      return;
-    } catch {
-      return;
+  try {
+    if (!getToken()) {
+      // Entry-point simplification: skip the login screen and authenticate silently with
+      // the seeded demo admin so the dashboard is the very first thing shown.
+      const res = await fetch(`${API_BASE}/auth/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "morgan", password: "admin123" }),
+      });
+      if (!res.ok) throw new Error("auto-login failed");
+      const { token } = await res.json();
+      setToken(token);
     }
+    await initApp();
+    showAppShell();
+  } catch {
+    showAppShell();
   }
-  showLogin();
 })();

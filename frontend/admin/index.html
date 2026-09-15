@@ -8,7 +8,7 @@
 </head>
 <body>
   <!-- ADM-1: Login screen -->
-  <section id="login-screen" class="screen" data-testid="login-screen">
+  <section id="login-screen" class="screen" data-testid="login-screen" hidden>
     <div class="login-card">
       <h1>🗺️ Operations Console</h1>
       <form id="login-form" data-testid="login-form">
@@ -41,6 +41,7 @@
       <button class="tab-button" role="tab" aria-selected="false" aria-controls="assignment-tab" data-tab="assignment" data-testid="tab-assignment-button">Assignment</button>
       <button class="tab-button" role="tab" aria-selected="false" aria-controls="masterdata-tab" data-tab="masterdata" data-testid="tab-masterdata-button">Master Data</button>
       <button class="tab-button" role="tab" aria-selected="false" aria-controls="history-tab" data-tab="history" data-testid="tab-history-button">History</button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="inquiries-tab" data-tab="inquiries" data-testid="tab-inquiries-button">Inquiries</button>
     </nav>
 
     <!-- ADM-2: Dashboard tab -->
@@ -158,6 +159,22 @@
       <p id="history-error" class="error-message" data-testid="history-error" role="alert" hidden></p>
       <p id="history-empty" class="info-message" data-testid="history-empty" hidden>No completed or failed deliveries match these filters.</p>
       <div id="history-list" class="delivery-card-list" data-testid="history-delivery-list"></div>
+    </section>
+
+    <!-- Customer inquiries console: minimal support inbox -->
+    <section id="inquiries-tab" class="tab-panel" data-testid="inquiries-tab" hidden>
+      <h2>Customer Inquiries</h2>
+      <div class="filter-bar" data-testid="inquiries-filter-bar">
+        <select id="inquiries-status-filter" data-testid="inquiries-status-filter">
+          <option value="">All</option>
+          <option value="open" selected>Open</option>
+          <option value="resolved">Resolved</option>
+        </select>
+      </div>
+      <p id="inquiries-loading" class="info-message" data-testid="inquiries-loading" role="status" hidden>Loading inquiries…</p>
+      <p id="inquiries-error" class="error-message" data-testid="inquiries-error" role="alert" hidden></p>
+      <p id="inquiries-empty" class="info-message" data-testid="inquiries-empty" hidden>No inquiries match this filter.</p>
+      <ul id="inquiries-list" class="masterdata-list" data-testid="inquiries-list"></ul>
     </section>
   </div>
 

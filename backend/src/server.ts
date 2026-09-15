@@ -11,6 +11,7 @@ import { createAuthRoutes } from "./routes/authRoutes.js";
 import { createDeliveryRoutes } from "./routes/deliveryRoutes.js";
 import { createMasterDataRoutes } from "./routes/masterDataRoutes.js";
 import { createEventsRoutes } from "./routes/eventsRoutes.js";
+import { createInquiryRoutes } from "./routes/inquiryRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,7 @@ async function main() {
   app.use("/api", createDeliveryRoutes(ctx));
   app.use("/api", createMasterDataRoutes(ctx));
   app.use("/api", createEventsRoutes(ctx));
+  app.use("/api", createInquiryRoutes(ctx));
 
   // Static frontend apps, served under their own URL paths.
   app.use("/customer", express.static(path.join(FRONTEND_ROOT, "customer")));

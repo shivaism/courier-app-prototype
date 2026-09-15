@@ -293,6 +293,42 @@ button {
   align-items: center;
 }
 
+/* Inquiry cards need to stack a header, message, and reply — override the flex-row layout
+   the shared .masterdata-list li rule uses for simple driver/camp rows. */
+.masterdata-list li.inquiry-item {
+  display: block;
+}
+
+.inquiry-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.inquiry-message {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+}
+
+.inquiry-reply {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--color-bg-subtle, #f6f8fa);
+  border-radius: 6px;
+  color: var(--color-muted);
+}
+
+.inquiry-reply-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.inquiry-reply-form textarea {
+  flex: 1;
+}
+
 .masterdata-list li.inactive {
   opacity: 0.5;
 }

@@ -37,3 +37,12 @@ Stable `data-testid` attributes throughout (e.g., `login-employee-id-input`, `de
 ## How to View
 
 With the Backend Service running (`cd backend && npm run dev`), open `http://localhost:3000/driver`. Seeded driver credentials: `EMP001` / `driver123` or `EMP002` / `driver123`.
+
+## Benchmark Upgrade Additions
+
+- **Authorization**: the backend enforces that a driver can only read/mutate their own assigned deliveries. Attempting to open a delivery that is no longer assigned returns the driver to the list with an announced explanation.
+- **Realtime worklist**: the app mints a one-use realtime ticket and opens an authenticated stream bound to the logged-in driver. Assignment and status changes made by operations (or another session) refresh the list and the open detail view automatically. A status pill shows Live / Reconnecting / Offline, and a spent ticket triggers a re-mint.
+- **Actionable cards**: each stop is a real button showing `Stop N`, product, full address, the request note (when present), status, and a re-delivery chip where applicable.
+- **Session integrity**: logout is scheduled from the JWT's own `exp`, so a screen cannot remain visibly authenticated after the 12-hour session ends. A 401 (including deactivation) ends the session with an explanation.
+- **Accessible dialogs**: the completion and failure modals use `role="dialog"`/`aria-modal`, receive focus on open, trap Tab while open, restore focus on close, and dismiss with Escape.
+- **States and targets**: loading and error messages cover list fetches, the failure memo is length-capped to match server validation, all primary controls meet the 44px minimum (including the previously 36px logout button), and transitions are disabled under `prefers-reduced-motion`.

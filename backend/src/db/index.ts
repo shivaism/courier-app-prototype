@@ -78,6 +78,17 @@ function runMigrations(db: Database.Database): void {
       actor TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS customer_inquiries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trackingNumber TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      reply TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      resolvedAt TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_inquiries_status ON customer_inquiries(status);
     CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status);
     CREATE INDEX IF NOT EXISTS idx_deliveries_driverId ON deliveries(driverId);
     CREATE INDEX IF NOT EXISTS idx_deliveries_campId ON deliveries(campId);

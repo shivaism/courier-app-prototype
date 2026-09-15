@@ -37,3 +37,14 @@ All interactive elements have stable `data-testid` attributes (e.g., `lookup-tra
 ## How to View
 
 With the Backend Service running (`cd backend && npm run dev`), open `http://localhost:3000/customer` in a browser.
+
+## Benchmark Upgrade Additions
+
+- **Persistent ETA states**: one shared countdown drives the detail row and the map card, seeded from the lookup response. States are `Arriving in …`, `Arriving soon` (final minute), and `ETA passed — driver is still on the way`. The interval stops once the estimate elapses instead of repainting `0s`.
+- **Realtime connection status**: a status pill shows Live / Reconnecting / Offline. On reconnect the app refetches the delivery and location snapshots before applying later events, since events during the gap were missed.
+- **Stale-lookup safety**: each lookup increments a generation token and closes the previous stream immediately, so a slow or failed lookup can never apply results or events belonging to a different delivery.
+- **Instruction integrity**: the textarea is the single submitted source of truth. Presets populate it; typing custom wording clears the preset so the two controls cannot disagree. Once locked, all editing controls are hidden and only the saved note (or an explicit no-note message) remains.
+- **Failed timeline**: for failed deliveries the last reached stage is derived from recorded timestamps, so completed progress still renders instead of collapsing.
+- **Fresh recent lookups**: stored statuses refresh on load. If a refresh fails the entry is preserved and labelled last known; unknown tracking numbers are marked not found.
+- **Accessibility**: recent lookups are real buttons, status/ETA changes announce through a polite live region, the map exposes an image label plus a text fallback when unavailable, route progress uses progressbar semantics, focus is visible, the layout reflows under 560px, and marker/progress animation is suppressed under `prefers-reduced-motion`.
+- **Privacy note**: a `no-referrer` policy is set. Leaflet (CDN), CARTO/OSM tiles, and driver-supplied proof-image URLs are third-party requests made by the browser; map coordinates are mock data, so the real delivery address is never transmitted.

@@ -10,12 +10,13 @@ npm test
 This runs `vitest run` against `backend/tests/`.
 
 ### 2. Review Test Results
-- **Expected**: 47 tests pass, 0 failures, across 4 test files
+- **Expected**: 75 tests pass, 0 failures, across 5 test files
 - **Test files**:
   - `masterDataService.test.ts` — 8 tests (BR-7: driver/camp CRUD, case-insensitive duplicate checks)
   - `authService.test.ts` — 8 tests (BR-9: login, generic auth failures, deactivated-driver rejection, token verification)
   - `deliveryService.test.ts` — 22 tests (BR-1 through BR-6: status sequencing, completion, failure/re-delivery, request note lockout, assignment, unassigned listing)
   - `deliveryRoutes.test.ts` — 9 integration tests (via `supertest`, exercising the Express app + real routes against an in-memory SQLite DB)
+  - `benchmarkUpgrades.test.ts` — 28 tests covering the benchmark upgrades: driver ownership enforcement (FR-B7), privileged SSE ticket scoping and single use (FR-B17), deactivated-token revocation (FR-B10), re-delivery attempt reset and simulator restart (FR-B19), operational metadata and outcome-time history (FR-B12/FR-B15), driver route order and note visibility (FR-B9), outcome/URL/length validation (FR-B11), and master-data integrity (FR-B14)
 - **Test report location**: printed to stdout by `vitest`; no separate coverage report is configured (not required for this workshop scope)
 
 ### 3. Fix Failing Tests

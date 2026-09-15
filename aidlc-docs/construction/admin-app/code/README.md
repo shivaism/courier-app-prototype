@@ -43,3 +43,13 @@ Stable `data-testid` attributes throughout (e.g., `tab-dashboard-button`, `assig
 ## How to View
 
 With the Backend Service running (`cd backend && npm run dev`), open `http://localhost:3000/admin`. Seeded admin credentials: `morgan` / `admin123`.
+
+## Benchmark Upgrade Additions
+
+- **Truthful aggregates**: Failed and Delayed are now separate cards. Delayed is a server-derived state (out for delivery past its ETA), not an alias for failed.
+- **Operational detail**: every delivery card shows its last status-change time, plus Delayed and Re-delivery chips. Exceptions are sorted above normal traffic.
+- **Complete assignment control**: the Assignment tab has two sections — items needing assignment (unassigned and re-delivery targets) and all active assigned deliveries, so any eligible delivery can be reassigned. Assignment shows the current driver, confirms, and announces success.
+- **Complete master data**: drivers and camps can now be edited through a dedicated dialog wired to the existing PATCH endpoints. Deactivation and deletion report success, and deleting a referenced camp surfaces the backend's 409 message instead of failing silently.
+- **Correct history**: the History tab requests `history=true`, so the backend filters and orders by terminal outcome time with inclusive day boundaries — no client-side merging. Cards show the completion/failure timestamp and failure reason.
+- **Authenticated realtime**: the admin-wide stream now requires a one-use ticket minted from the admin JWT, so it is no longer publicly subscribable. A connection pill shows Live / Reconnecting / Offline and the active tab re-syncs after a reconnect.
+- **Accessibility and states**: the tab bar uses `role="tablist"` with `aria-selected`, dialogs use `role="dialog"`/`aria-modal` with focus trapping and Escape, master-data inputs have real labels instead of placeholder-only hints, a live region announces updates, and loading/error/empty states cover the dashboard and history. Layouts reflow at 900px and 600px, and the failed-card pulse is disabled under `prefers-reduced-motion`.

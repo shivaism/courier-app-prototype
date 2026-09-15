@@ -95,3 +95,31 @@ npm test
 - No admin login-attempt lockout (documented gap)
 - `futureRouteRef` field reserved on Delivery for the deferred real-time map feature (DEFER-1) — not populated or used
 - Camp deletion does not guard against active deliveries referencing it (documented as an accepted limitation, BR-7)
+
+## Benchmark Upgrade Additions
+
+### New Files
+- `src/services/sseTicketService.ts` — mints short-lived, one-use tickets for privileged EventSource connections (native `EventSource` cannot send an `Authorization` header)
+- `tests/benchmarkUpgrades.test.ts` — 28 tests for the upgrades below
+
+### New / Changed Endpoints
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/events/ticket` | driver or admin | Mint a one-use realtime ticket; the channel is derived from the JWT and cannot be chosen by the caller |
+| GET | `/api/events?ticket=…` | ticket | Privileged stream (admin-wide or the authenticated driver's channel) |
+| GET | `/api/events?channel=tracking&trackingNumber=…` | none | Recipient capability stream; now validates that the tracking number exists |
+| GET | `/api/admin/deliveries?history=true` | admin | Terminal deliveries only, filtered/ordered by outcome time with inclusive day bounds |
+
+### Behavioral Changes
+- **Driver ownership**: `getDeliveryForDriver` guards status, completion, failure, and the shared detail route. Non-owned IDs return 404 so they cannot be probed.
+- **Token revocation**: `requireAuth` rechecks actor status, so deactivating a driver invalidates existing tokens.
+- **Re-delivery reset**: reassigning a failed delivery sets a fresh `outForDeliveryAt` and ETA, clears failure fields, records history, and republishes `statusChanged` so live tracking restarts.
+- **Operational metadata**: `getOperationalMeta` supplies `lastStatusChangeAt`, `outcomeAt`, and a derived `isDelayed` (out for delivery past its ETA); serialized on every admin view.
+- **Driver route order**: `/api/driver/deliveries` returns a stable 1-based `deliveryOrder` computed across the driver's whole route, plus `eta`.
+- **Validation**: receipt method and failure reason must be allowed enum values; proof URLs must be HTTP(S); notes and memos have length limits.
+- **Master data**: empty required fields are rejected, camp renames cannot collide, and deleting a referenced camp returns 409.
+- **SSE health**: streams emit `retry: 2000` and periodic heartbeat comments; connections clean up their heartbeat timers on close.
+
+### External Services
+The live map depends on the public no-API-key OSRM routing service, with a deterministic offline fallback. Camp origins and derived destinations are mock coordinates, so no real recipient address is sent to any third party.

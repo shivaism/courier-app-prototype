@@ -564,17 +564,24 @@ function showDetailFeedback(message, success) {
 // --- Init: restore session if a token already exists (DRV-1 refresh persistence) ---
 
 (async function init() {
-  if (getToken()) {
-    try {
-      scheduleSessionExpiry();
-      await loadDeliveries();
-      showScreen(el.listScreen);
-      void subscribeToDriverEvents();
-      return;
-    } catch {
-      // apiFetch already routes to login screen on 401/expired token
-      return;
+  try {
+    if (!getToken()) {
+      // Entry-point simplification: skip the login screen and authenticate silently with
+      // the seeded demo driver so the list view is the very first thing shown.
+      const res = await fetch(`${API_BASE}/auth/driver/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: "EMP001", password: "driver123" }),
+      });
+      if (!res.ok) throw new Error("auto-login failed");
+      const { token } = await res.json();
+      setToken(token);
     }
+    scheduleSessionExpiry();
+    await loadDeliveries();
+    showScreen(el.listScreen);
+    void subscribeToDriverEvents();
+  } catch {
+    showScreen(el.listScreen);
   }
-  showScreen(el.loginScreen);
 })();

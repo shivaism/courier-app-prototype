@@ -1,56 +1,84 @@
 # Build and Test Summary — Delivery Tracking & Driver Console
 
+**Last updated**: after the benchmark-driven upgrade pass (see `aidlc-docs/inception/requirements/benchmark-analysis.md`).
+
 ## Build Status
-- **Build tool**: TypeScript compiler (`tsc`) for the backend; no build step for the 3 static frontend apps
-- **Build status**: **Success** — `npm run build` in `backend/` completes with no errors
-- **Build artifacts**: `backend/dist/**/*.js` (compiled from `backend/src/**/*.ts`)
-- **Build time**: A few seconds (small codebase)
+- **Build tool**: TypeScript compiler (`tsc`) for the backend; the three frontend apps are static files with no build step
+- **Build status**: **Success** — `npm run build` completes with no errors; `tsc --noEmit` reports no type errors
+- **Build artifacts**: `backend/dist/**/*.js`
 
 ## Test Execution Summary
 
-### Unit Tests
-- **Total tests**: 47
-- **Passed**: 47
+### Automated Tests
+- **Total tests**: 75 (up from 47)
+- **Passed**: 75
 - **Failed**: 0
-- **Coverage**: Not formally measured (no coverage tool configured — out of scope for this workshop), but all 10 business rules (BR-1 through BR-10) and all master-data/auth validation paths have dedicated test cases
+- **Test files**: 5
+
+| File | Tests | Coverage focus |
+|---|---|---|
+| `masterDataService.test.ts` | 8 | Driver/camp CRUD, case-insensitive duplicates (BR-7) |
+| `authService.test.ts` | 8 | Login, generic auth failures, deactivated driver rejection, token verification (BR-9) |
+| `deliveryService.test.ts` | 22 | Status sequencing, completion, failure/re-delivery, note lock, assignment (BR-1–BR-6) |
+| `deliveryRoutes.test.ts` | 9 | API integration across customer/driver/admin surfaces |
+| `benchmarkUpgrades.test.ts` | 28 | Benchmark upgrades: ownership enforcement, SSE ticket scoping, re-delivery reset, operational metadata, outcome-time history, token revocation, outcome validation, master-data integrity |
+
 - **Status**: **Pass**
 
-### Integration Tests
-- **Test scenarios**: 4 (static frontend serving, full delivery lifecycle across 3 personas, failure/re-delivery flow, SSE real-time propagation)
-- **Passed**: 4
-- **Failed**: 0
-- **Status**: **Pass** — all 4 scenarios verified live against a running instance (see `integration-test-instructions.md` for full detail and exact steps)
+### Live End-to-End Validation
+
+All scenarios were executed against a running instance.
+
+| Scenario | Result |
+|---|---|
+| Privileged SSE without a ticket (`channel=all`) | 401 as required |
+| Privileged SSE with an arbitrary `driverId` | 401 as required |
+| SSE for an unknown tracking number | 404 as required |
+| Stream ticket minting with/without auth | 201 / 401 as required |
+| Reused (one-use) stream ticket | 401 as required |
+| Cross-driver status update and detail read | 404 denied; owning driver 200 |
+| Invalid receipt method, `javascript:` proof URL, invalid failure reason | 400 each |
+| Referenced camp deletion | 409 with a clear message |
+| Admin dashboard operational metadata | `lastStatusChangeAt`, `outcomeAt`, `isDelayed` all present |
+| Driver route order and note visibility | Stops numbered 1..N with request notes |
+| History (`history=true`) | Terminal deliveries only, ordered by outcome time, includes failure reason |
+| **Re-delivery reset (previously broken)** | 204 before reassign → 200 after, 52-waypoint live route, fresh future ETA, cleared failure fields |
+| SSE stream health | Emits `retry: 2000`, initial comment, and live `locationUpdated` events |
+| Frontend asset serving | All 9 customer/driver/admin assets return 200 |
+
+- **Status**: **Pass**
 
 ### Performance Tests
-- **Status**: **N/A** — explicitly out of scope for this demo-scale, one-day-workshop project (see `performance-test-instructions.md`). The one relevant NFR (2-second SSE propagation) was verified functionally, not under load.
+- **Status**: **N/A** — demo-scale, local-only scope (see `performance-test-instructions.md`). The one in-scope timing requirement (2-second realtime propagation) was verified functionally.
 
 ### Additional Tests
-- **Contract tests**: N/A — single backend, no independent service-to-service contracts to validate (the 3 frontends are static clients of one API, not separate services)
-- **Security tests**: N/A — Security Baseline extension was explicitly opted out during Requirements Analysis (workshop MVP, not production-grade)
-- **E2E tests**: Covered functionally by Integration Test Scenario 2 (full cross-persona delivery lifecycle) — no dedicated browser-automation E2E tooling (e.g., Playwright) was set up, consistent with workshop scope
+- **Contract tests**: N/A — one backend, no independent service-to-service contracts
+- **Security tests**: No external scanning tooling. However, authorization behavior is now explicitly covered by automated tests (driver ownership, privileged stream scoping, deactivated-token revocation) and by live validation
+- **Accessibility tests**: No automated axe/browser suite. Accessibility work was implemented against WCAG 2.2 guidance (visible focus, status messages, target size, keyboard operation, reduced motion) and verified by code review and markup inspection. **Full conformance still requires manual assistive-technology testing and expert review**
+- **E2E browser tests**: No Playwright/Cypress suite. Cross-persona journeys were validated via live API/stream testing
 
-## Story Coverage Verification
+## Story Coverage
 
-All 17 user stories from `aidlc-docs/inception/user-stories/stories.md` have been implemented and verified:
+All 17 original stories plus the 5 benchmark enhancement stories (BEST-1–BEST-5) are implemented.
 
-| Persona | Stories | Verified Via |
-|---|---|---|
-| Customer | CUST-1, CUST-2, CUST-3, CUST-4 | Unit tests (note lockout, ETA) + live integration test (lookup, note edit, SSE timeline, history is client-side by design) |
-| Driver | DRV-1, DRV-2, DRV-3, DRV-4 | Unit tests (BR-1–BR-6, BR-9) + live integration test (login, list, status advance, completion, failure) |
-| Admin | ADM-1, ADM-2, ADM-3, ADM-4, ADM-5 | Unit tests (BR-7, BR-9) + live integration test (login, dashboard, assignment, master data CRUD + duplicate rejection, history filtering) |
-| System | SYS-1, SYS-2, SYS-3 | Live verification (seed data idempotency by design, manual creation via API, SSE propagation confirmed) |
-| Deferred | DEFER-1 | Confirmed NOT implemented — `futureRouteRef` field reserved on Delivery entity only, no map UI/simulator built, as planned |
+| Group | Status |
+|---|---|
+| CUST-1–CUST-4 | Implemented, with ETA states, connection recovery, note precedence, refreshed recent history |
+| DRV-1–DRV-4 | Implemented, with ownership enforcement, realtime worklist, route order, session expiry |
+| ADM-1–ADM-5 | Implemented, with accurate timestamps, delayed state, full reassignment, edit flows, outcome-time history |
+| SYS-1–SYS-3 | Implemented, with authenticated privileged streams, heartbeats, retry guidance |
+| DEFER-1 (live map) | **Implemented** as an optional extension: road-snapped mock route, no real GPS, no paid map API |
+| BEST-1–BEST-5 | Implemented and covered by `benchmarkUpgrades.test.ts` |
 
-## Known Gaps (Carried Forward, Documented, Accepted)
+## Known Gaps (Documented and Accepted)
 
-- No admin login-attempt lockout (explicit, documented gap from `requirements.md`)
-- Camp deletion has no guard against active deliveries referencing it (accepted limitation, BR-7)
-- No automated coverage/E2E tooling configured (out of scope for this workshop)
+- Admin login attempt limiting / lockout is not implemented (explicit workshop exclusion).
+- No automated browser, accessibility, or load-testing suites; WCAG conformance is not formally certified.
+- Delayed state is a derived display signal only; automated SLA escalation remains out of scope.
+- The customer live map depends on external services (Leaflet CDN, CARTO/OSM tiles, OSRM routing). Mock coordinates are used, so no real recipient address is transmitted, but third parties do observe request metadata. Proof-of-delivery images are driver-supplied URLs loaded directly by the browser.
+- Recipient-controlled redirects (alternate address, reschedule, pickup point) remain out of scope without commerce/courier integration.
 
 ## Overall Status
 - **Build**: Success
-- **All tests**: Pass (47/47 automated unit/integration tests, plus 4/4 manually-verified live integration scenarios)
-- **Ready for Operations**: Yes, within the explicitly scoped limits of this project (local-only, demo-scale, one-day workshop — not a production deployment)
-
-## Next Steps
-All INCEPTION and CONSTRUCTION phase work is complete. The OPERATIONS phase is a placeholder in this workflow (no deployment/monitoring activity is in scope for this project, per `requirements/delivery-tracking-constraints.md`).
+- **All tests**: Pass (75/75 automated, plus live end-to-end validation)
+- **Ready for Operations**: Yes, within the explicitly scoped limits of this project (local-only, demo-scale, not a production deployment)

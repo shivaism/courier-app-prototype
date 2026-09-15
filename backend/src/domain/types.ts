@@ -50,7 +50,10 @@ export interface Delivery {
   outForDeliveryAt: string | null;
   deliveredAt: string | null;
   createdAt: string;
-  futureRouteRef: string | null; // Reserved for DEFER-1 (real-time map), not used in this release
+  // Legacy placeholder column. The live map is now active but models routes in-memory via
+  // LocationSimulatorService (road-snapped OSRM route, synthetic fallback), so this column
+  // is retained only for schema compatibility and is intentionally unused.
+  futureRouteRef: string | null;
 }
 
 export interface Driver {

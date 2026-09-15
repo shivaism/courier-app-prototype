@@ -1,13 +1,19 @@
 // Location Simulator (optional extension component, requirements.md Section 3.5 / 3.4.1).
-// Interpolates a mock delivery-vehicle position along a deterministic, street-grid-style
-// camp->destination route while a delivery is "out_for_delivery", turning corners at each
-// waypoint rather than moving in a smooth curve — meant to feel like it's following city
-// streets, similar to a food-delivery tracking map. Pushes location updates over the existing
-// SSE channel (via the shared event bus, same pattern as every other domain event — BR-10).
+// Interpolates a mock delivery-vehicle position while a delivery is "out_for_delivery" and
+// pushes updates over the existing SSE channel via the shared event bus (BR-10).
 //
-// Per constraints.md: this uses NO real GPS hardware and NO paid/key-issuance map API. The
-// "destination" and route waypoints are deterministically derived mock points (see utils/geo.ts),
-// standing in for a geocoded delivery address and a real road network.
+// Route source, in priority order:
+//   1. A real road-snapped route from the public no-API-key OSRM routing service, so the
+//      vehicle follows actual streets (see utils/geo.ts fetchRoadRoute).
+//   2. A deterministic synthetic "street grid" fallback when routing is unreachable, so the
+//      demo still works offline (see utils/geo.ts deriveStreetRoute).
+//
+// Per constraints.md: this uses NO real GPS hardware and NO paid/key-issuance map API. Both
+// the origin camp coordinates and the derived destination are mock data standing in for a
+// geocoded recipient address, so no real delivery address is sent to any third party.
+//
+// A failed delivery stops simulation; reassigning it (a fresh re-delivery attempt) republishes
+// a statusChanged event, which restarts simulation with a new attempt timestamp and ETA.
 
 import type Database from "better-sqlite3";
 import { eventBus } from "../events/eventBus.js";

@@ -62,8 +62,18 @@
 ### 🟡 OPERATIONS PHASE
 - [x] Operations - PLACEHOLDER (no deployment/monitoring work in scope for this local-only workshop project)
 
+## Benchmark Upgrade Pass (Post-Delivery)
+- **Trigger**: User requested a benchmark review against global best-in-class delivery experiences, followed by implementation, with full decision autonomy delegated.
+- **Analysis**: `aidlc-docs/inception/requirements/benchmark-analysis.md` (Amazon, FedEx, UPS, DHL, W3C WCAG 2.2, MDN SSE)
+- **New requirements**: FR-B1–FR-B20, NFR-B1–NFR-B4 in `inception/requirements/requirements.md`
+- **New stories**: BEST-1–BEST-5 in `inception/user-stories/stories.md`
+- **Security fixes**: driver ownership enforcement; ticket-authenticated privileged SSE channels; deactivated-driver token revocation; outcome enum/URL/length validation
+- **Correctness fixes**: re-delivery attempt reset with live-map restart; outcome-time history semantics; last-status-change and derived delayed state; camp-reference delete guard; customer note precedence; stale-lookup/stream guarding; failed-timeline derivation
+- **Experience upgrades**: ETA time states, realtime connection status with snapshot recovery, driver realtime worklist and route order, full admin reassignment and master-data editing, WCAG-oriented accessibility, responsive reflow, reduced motion, loading/error/empty states
+- **Validation**: 75/75 automated tests pass across 5 files; `tsc --noEmit` and `npm run build` clean; live end-to-end validation of authorization, streams, re-delivery, history, and asset serving
+
 ## Current Status
 - **Lifecycle Phase**: CONSTRUCTION
-- **Current Stage**: AI-DLC workflow complete
+- **Current Stage**: AI-DLC workflow complete; benchmark upgrade pass complete
 - **Next Stage**: None - project delivered
 - **Status**: INCEPTION, CONSTRUCTION, and OPERATIONS (placeholder) phases all complete. Backend Service, Customer App, Driver App, and Admin App all implemented, unit-tested (47/47 passing), and integration-verified live across 4 cross-persona scenarios. Full delivery lifecycle, failure/re-delivery flow, and SSE real-time propagation all confirmed working end-to-end. Ready to run via `cd backend && npm install && npm run dev`.
