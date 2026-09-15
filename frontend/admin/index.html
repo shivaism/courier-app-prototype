@@ -28,14 +28,19 @@
   <div id="app-shell" class="app-shell" data-testid="app-shell" hidden>
     <header class="app-header">
       <h1>🗺️ Operations Console</h1>
-      <button id="logout-button" data-testid="logout-button" class="secondary-button">Log Out</button>
+      <div class="app-header-actions">
+        <span id="connection-status" class="connection-status" data-testid="connection-status" data-state="idle" role="status">Live</span>
+        <button id="logout-button" data-testid="logout-button" class="secondary-button">Log Out</button>
+      </div>
     </header>
 
-    <nav class="tab-bar" data-testid="tab-bar">
-      <button class="tab-button active" data-tab="dashboard" data-testid="tab-dashboard-button">Dashboard</button>
-      <button class="tab-button" data-tab="assignment" data-testid="tab-assignment-button">Assignment</button>
-      <button class="tab-button" data-tab="masterdata" data-testid="tab-masterdata-button">Master Data</button>
-      <button class="tab-button" data-tab="history" data-testid="tab-history-button">History</button>
+    <p id="admin-live-region" class="visually-hidden" data-testid="admin-live-region" role="status" aria-live="polite"></p>
+
+    <nav class="tab-bar" data-testid="tab-bar" role="tablist" aria-label="Operations sections">
+      <button class="tab-button active" role="tab" aria-selected="true" aria-controls="dashboard-tab" data-tab="dashboard" data-testid="tab-dashboard-button">Dashboard</button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="assignment-tab" data-tab="assignment" data-testid="tab-assignment-button">Assignment</button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="masterdata-tab" data-tab="masterdata" data-testid="tab-masterdata-button">Master Data</button>
+      <button class="tab-button" role="tab" aria-selected="false" aria-controls="history-tab" data-tab="history" data-testid="tab-history-button">History</button>
     </nav>
 
     <!-- ADM-2: Dashboard tab -->
@@ -53,9 +58,13 @@
           <span class="aggregate-count" id="count-delivered">0</span>
           <span class="aggregate-label">Delivered</span>
         </div>
-        <div class="aggregate-card danger" data-status-group="failed" data-testid="aggregate-card-failed-delayed">
+        <div class="aggregate-card danger" data-status-group="failed" data-testid="aggregate-card-failed">
           <span class="aggregate-count" id="count-failed">0</span>
-          <span class="aggregate-label">Failed / Delayed</span>
+          <span class="aggregate-label">Failed</span>
+        </div>
+        <div class="aggregate-card warning" data-status-group="delayed" data-testid="aggregate-card-delayed">
+          <span class="aggregate-count" id="count-delayed">0</span>
+          <span class="aggregate-label">Delayed</span>
         </div>
       </div>
 
@@ -69,15 +78,26 @@
         <button id="new-delivery-button" data-testid="new-delivery-button">+ New Delivery</button>
       </div>
 
+      <p id="dashboard-loading" class="info-message" data-testid="dashboard-loading" role="status" hidden>Loading deliveries…</p>
+      <p id="dashboard-error" class="error-message" data-testid="dashboard-error" role="alert" hidden></p>
+      <p id="dashboard-empty" class="info-message" data-testid="dashboard-empty" hidden>No deliveries match these filters.</p>
       <div id="dashboard-list" class="delivery-card-list" data-testid="dashboard-delivery-list"></div>
     </section>
 
     <!-- ADM-3: Assignment tab -->
     <section id="assignment-tab" class="tab-panel" data-testid="assignment-tab" hidden>
-      <h2>Unassigned &amp; Re-delivery Targets</h2>
+      <h2>Needs Assignment</h2>
+      <p class="info-message">Unassigned deliveries and re-delivery targets.</p>
       <div id="unassigned-list" class="delivery-card-list" data-testid="unassigned-delivery-list"></div>
       <p id="unassigned-empty-message" class="info-message" data-testid="unassigned-empty-message" hidden>
         No unassigned deliveries.
+      </p>
+
+      <h2>All Active Deliveries</h2>
+      <p class="info-message">Reassign any in-progress delivery to a different driver.</p>
+      <div id="reassign-list" class="delivery-card-list" data-testid="reassign-delivery-list"></div>
+      <p id="reassign-empty-message" class="info-message" data-testid="reassign-empty-message" hidden>
+        No active deliveries to reassign.
       </p>
     </section>
 
@@ -87,25 +107,32 @@
         <div class="masterdata-column">
           <h2>Drivers</h2>
           <form id="driver-form" data-testid="driver-form">
-            <input type="text" id="driver-employee-id" data-testid="driver-employee-id-input" placeholder="Employee ID" required />
-            <input type="text" id="driver-name" data-testid="driver-name-input" placeholder="Name" required />
-            <input type="text" id="driver-area" data-testid="driver-area-input" placeholder="Assigned Area" required />
-            <input type="text" id="driver-contact" data-testid="driver-contact-input" placeholder="Contact" required />
-            <input type="password" id="driver-password" data-testid="driver-password-input" placeholder="Password" required />
+            <label for="driver-employee-id">Employee ID</label>
+            <input type="text" id="driver-employee-id" data-testid="driver-employee-id-input" required />
+            <label for="driver-name">Name</label>
+            <input type="text" id="driver-name" data-testid="driver-name-input" required />
+            <label for="driver-area">Assigned Area</label>
+            <input type="text" id="driver-area" data-testid="driver-area-input" required />
+            <label for="driver-contact">Contact</label>
+            <input type="text" id="driver-contact" data-testid="driver-contact-input" required />
+            <label for="driver-password">Password</label>
+            <input type="password" id="driver-password" data-testid="driver-password-input" required />
             <button type="submit" data-testid="driver-submit-button">Register Driver</button>
           </form>
-          <p id="driver-feedback" class="feedback-message" data-testid="driver-feedback-message" hidden></p>
+          <p id="driver-feedback" class="feedback-message" data-testid="driver-feedback-message" role="status" hidden></p>
           <ul id="driver-list" class="masterdata-list" data-testid="driver-list"></ul>
         </div>
 
         <div class="masterdata-column">
           <h2>Camps</h2>
           <form id="camp-form" data-testid="camp-form">
-            <input type="text" id="camp-name" data-testid="camp-name-input" placeholder="Camp Name" required />
-            <input type="text" id="camp-area" data-testid="camp-area-input" placeholder="Assigned Area" required />
+            <label for="camp-name">Camp Name</label>
+            <input type="text" id="camp-name" data-testid="camp-name-input" required />
+            <label for="camp-area">Assigned Area</label>
+            <input type="text" id="camp-area" data-testid="camp-area-input" required />
             <button type="submit" data-testid="camp-submit-button">Register Camp</button>
           </form>
-          <p id="camp-feedback" class="feedback-message" data-testid="camp-feedback-message" hidden></p>
+          <p id="camp-feedback" class="feedback-message" data-testid="camp-feedback-message" role="status" hidden></p>
           <ul id="camp-list" class="masterdata-list" data-testid="camp-list"></ul>
         </div>
       </div>
@@ -127,12 +154,23 @@
         </select>
         <button id="history-filter-button" data-testid="history-filter-button">Apply Filters</button>
       </div>
+      <p id="history-loading" class="info-message" data-testid="history-loading" role="status" hidden>Loading history…</p>
+      <p id="history-error" class="error-message" data-testid="history-error" role="alert" hidden></p>
+      <p id="history-empty" class="info-message" data-testid="history-empty" hidden>No completed or failed deliveries match these filters.</p>
       <div id="history-list" class="delivery-card-list" data-testid="history-delivery-list"></div>
     </section>
   </div>
 
   <!-- Shared: status-history timeline modal (ADM-2, ADM-5) -->
-  <div id="history-modal" class="modal" data-testid="history-timeline-modal" hidden>
+  <div
+    id="history-modal"
+    class="modal"
+    data-testid="history-timeline-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="history-modal-title"
+    hidden
+  >
     <div class="modal-content">
       <h2 id="history-modal-title" data-testid="history-modal-title"></h2>
       <ol id="history-timeline" class="history-timeline" data-testid="history-timeline-list"></ol>
@@ -141,9 +179,17 @@
   </div>
 
   <!-- ADM-3: Assign/reassign confirmation modal -->
-  <div id="assign-modal" class="modal" data-testid="assign-modal" hidden>
+  <div
+    id="assign-modal"
+    class="modal"
+    data-testid="assign-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="assign-modal-title"
+    hidden
+  >
     <div class="modal-content">
-      <h2>Assign Delivery</h2>
+      <h2 id="assign-modal-title">Assign Delivery</h2>
       <p id="assign-modal-delivery-info" data-testid="assign-modal-delivery-info"></p>
       <label for="assign-driver-select">Driver</label>
       <select id="assign-driver-select" data-testid="assign-driver-select" required></select>
@@ -156,9 +202,17 @@
   </div>
 
   <!-- SYS-2: New delivery modal -->
-  <div id="new-delivery-modal" class="modal" data-testid="new-delivery-modal" hidden>
+  <div
+    id="new-delivery-modal"
+    class="modal"
+    data-testid="new-delivery-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="new-delivery-modal-title"
+    hidden
+  >
     <div class="modal-content">
-      <h2>Create New Delivery</h2>
+      <h2 id="new-delivery-modal-title">Create New Delivery</h2>
       <form id="new-delivery-form" data-testid="new-delivery-form">
         <label for="new-delivery-product">Product Name</label>
         <input type="text" id="new-delivery-product" data-testid="new-delivery-product-input" required />
@@ -172,7 +226,43 @@
           <button type="button" id="new-delivery-cancel-button" data-testid="new-delivery-cancel-button" class="secondary-button">Cancel</button>
           <button type="submit" data-testid="new-delivery-submit-button">Create</button>
         </div>
-        <p id="new-delivery-feedback" class="feedback-message" data-testid="new-delivery-feedback-message" hidden></p>
+        <p id="new-delivery-feedback" class="feedback-message" data-testid="new-delivery-feedback-message" role="status" hidden></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADM-4: Edit master-data record modal (drivers and camps) -->
+  <div
+    id="edit-modal"
+    class="modal"
+    data-testid="edit-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="edit-modal-title"
+    hidden
+  >
+    <div class="modal-content">
+      <h2 id="edit-modal-title" data-testid="edit-modal-title">Edit Record</h2>
+      <form id="edit-form" data-testid="edit-form">
+        <div id="edit-field-driver" hidden>
+          <label for="edit-driver-name">Name</label>
+          <input type="text" id="edit-driver-name" data-testid="edit-driver-name-input" />
+          <label for="edit-driver-area">Assigned Area</label>
+          <input type="text" id="edit-driver-area" data-testid="edit-driver-area-input" />
+          <label for="edit-driver-contact">Contact</label>
+          <input type="text" id="edit-driver-contact" data-testid="edit-driver-contact-input" />
+        </div>
+        <div id="edit-field-camp" hidden>
+          <label for="edit-camp-name">Camp Name</label>
+          <input type="text" id="edit-camp-name" data-testid="edit-camp-name-input" />
+          <label for="edit-camp-area">Assigned Area</label>
+          <input type="text" id="edit-camp-area" data-testid="edit-camp-area-input" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="edit-cancel-button" data-testid="edit-cancel-button" class="secondary-button">Cancel</button>
+          <button type="submit" data-testid="edit-submit-button">Save Changes</button>
+        </div>
+        <p id="edit-feedback" class="feedback-message" data-testid="edit-feedback-message" role="status" hidden></p>
       </form>
     </div>
   </div>

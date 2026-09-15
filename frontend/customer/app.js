@@ -38,6 +38,10 @@ const el = {
   noteFeedback: document.getElementById("note-feedback"),
   noteReadonlyView: document.getElementById("note-readonly-view"),
   noteReadonlyText: document.getElementById("note-readonly-text"),
+  lookupLoading: document.getElementById("lookup-loading"),
+  lookupButton: document.querySelector('#lookup-form button[type="submit"]'),
+  connectionStatus: document.getElementById("connection-status"),
+  liveRegion: document.getElementById("delivery-live-region"),
   historyList: document.getElementById("history-list"),
   historyEmptyMessage: document.getElementById("history-empty-message"),
 };
@@ -54,10 +58,16 @@ let etaTargetMs = null;
 let hasCenteredOnVehicle = false;
 let isFollowingVehicle = false;
 let lastHeading = 0; // accumulated rotation in degrees, not clamped to 0-360 (see shortestRotation)
+// Monotonic lookup token: guards against a slow/failed earlier lookup applying its results
+// (or its SSE events) after the user has already started tracking a different delivery.
+let lookupGeneration = 0;
+let lastAnnouncedStatus = null;
 
 const mapEl = {
   section: document.getElementById("live-map-section"),
   canvas: document.getElementById("live-map-canvas"),
+  progress: document.getElementById("live-map-progress"),
+  fallback: document.getElementById("live-map-fallback"),
   etaCountdown: document.getElementById("live-map-eta-countdown"),
   progressFill: document.getElementById("live-map-progress-fill"),
   driverAvatar: document.getElementById("live-map-driver-avatar"),
@@ -89,8 +99,36 @@ function saveHistory(history) {
 
 function recordLookup(trackingNumber, status) {
   const history = getHistory().filter((h) => h.trackingNumber !== trackingNumber);
-  history.unshift({ trackingNumber, status, lookedUpAt: new Date().toISOString() });
+  history.unshift({ trackingNumber, status, lookedUpAt: new Date().toISOString(), stale: false });
   saveHistory(history.slice(0, 20)); // cap history length
+  renderHistory();
+}
+
+/**
+ * Refreshes the stored status of each recent lookup on page load so returning visitors do
+ * not see a delivery still labelled "In progress" after it has already completed. Entries
+ * are preserved (and marked last-known) if the refresh fails, so local history is never
+ * lost because of a transient network problem.
+ */
+async function refreshRecentLookupStatuses() {
+  const history = getHistory();
+  if (history.length === 0) return;
+
+  const refreshed = await Promise.all(
+    history.map(async (item) => {
+      try {
+        const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(item.trackingNumber)}`);
+        if (res.status === 404) return { ...item, missing: true, stale: false };
+        if (!res.ok) return { ...item, stale: true };
+        const delivery = await res.json();
+        return { ...item, status: delivery.status, stale: false, missing: false };
+      } catch {
+        return { ...item, stale: true };
+      }
+    })
+  );
+
+  saveHistory(refreshed);
   renderHistory();
 }
 
@@ -101,23 +139,37 @@ function renderHistory() {
 
   for (const item of history) {
     const li = document.createElement("li");
-    li.dataset.testid = `recent-lookup-item-${item.trackingNumber}`;
+
+    // Rendered as a <button> so it is reachable and activatable by keyboard and announced
+    // as an interactive control by assistive technology.
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-item-button";
+    button.dataset.testid = `recent-lookup-item-${item.trackingNumber}`;
 
     const label = document.createElement("span");
     label.textContent = item.trackingNumber;
 
     const badge = document.createElement("span");
     const isCompleted = item.status === "delivered" || item.status === "failed";
-    badge.className = `history-badge ${isCompleted ? "completed" : ""}`;
-    badge.textContent = isCompleted ? "Completed" : "In progress";
+    const badgeText = item.missing
+      ? "Not found"
+      : isCompleted
+        ? item.status === "failed"
+          ? "Delivery failed"
+          : "Delivered"
+        : "In progress";
+    badge.className = `history-badge ${isCompleted ? "completed" : ""} ${item.stale ? "stale" : ""}`.trim();
+    badge.textContent = item.stale ? `${badgeText} (last known)` : badgeText;
 
-    li.appendChild(label);
-    li.appendChild(badge);
-    li.addEventListener("click", () => {
+    button.append(label, badge);
+    button.setAttribute("aria-label", `Track ${item.trackingNumber} — ${badge.textContent}`);
+    button.addEventListener("click", () => {
       el.trackingInput.value = item.trackingNumber;
       performLookup(item.trackingNumber);
     });
 
+    li.appendChild(button);
     el.historyList.appendChild(li);
   }
 }
@@ -133,9 +185,19 @@ el.lookupForm.addEventListener("submit", (e) => {
 
 async function performLookup(trackingNumber) {
   hideError();
+  // Close any previous stream before the request starts, so a failed or slow new lookup can
+  // never leave the previous delivery's events driving the UI.
+  closeEventStream();
   resetMapForNewLookup();
+  setConnectionState("idle");
+
+  const generation = ++lookupGeneration;
+  setLookupBusy(true);
+
   try {
     const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(trackingNumber)}`);
+    if (generation !== lookupGeneration) return; // superseded by a newer lookup
+
     if (res.status === 404) {
       showError("Tracking number not found. Please check and try again.");
       el.resultSection.hidden = true;
@@ -146,14 +208,37 @@ async function performLookup(trackingNumber) {
       return;
     }
     const delivery = await res.json();
+    if (generation !== lookupGeneration) return;
+
+    currentTrackingNumber = delivery.trackingNumber;
+    lastAnnouncedStatus = null;
     renderDelivery(delivery);
     recordLookup(delivery.trackingNumber, delivery.status);
-    await loadHistoryTimeline(delivery.trackingNumber);
-    await refreshMapSnapshot(delivery.trackingNumber);
-    subscribeToUpdates(delivery.trackingNumber);
-  } catch (err) {
-    showError("Network error — please check your connection and try again.");
+    await refreshMapSnapshot(delivery.trackingNumber, generation);
+    if (generation !== lookupGeneration) return;
+    subscribeToUpdates(delivery.trackingNumber, generation);
+  } catch {
+    if (generation === lookupGeneration) {
+      showError("Network error — please check your connection and try again.");
+    }
+  } finally {
+    if (generation === lookupGeneration) setLookupBusy(false);
   }
+}
+
+function setLookupBusy(busy) {
+  el.lookupLoading.hidden = !busy;
+  if (el.lookupButton) el.lookupButton.disabled = busy;
+}
+
+function setConnectionState(state) {
+  el.connectionStatus.dataset.state = state;
+  el.connectionStatus.textContent =
+    state === "live" ? "Live" : state === "reconnecting" ? "Reconnecting…" : state === "offline" ? "Offline" : "";
+}
+
+function announce(message) {
+  el.liveRegion.textContent = message;
 }
 
 function showError(message) {
@@ -196,6 +281,12 @@ function renderDelivery(delivery) {
   renderTimeline(delivery);
   updateDriverCard(delivery);
 
+  // Announce meaningful status transitions once (WCAG 4.1.3) without stealing focus.
+  if (delivery.status !== lastAnnouncedStatus) {
+    lastAnnouncedStatus = delivery.status;
+    announce(`Delivery ${delivery.trackingNumber} status: ${delivery.status.replace(/_/g, " ")}`);
+  }
+
   if (delivery.status === "delivered") {
     el.completionPanel.hidden = false;
     el.completionTime.textContent = delivery.deliveredAt
@@ -237,16 +328,29 @@ function renderDelivery(delivery) {
 
 function renderTimeline(delivery) {
   el.timeline.innerHTML = "";
-  const currentIndex = STAGE_ORDER.findIndex((s) => s.key === delivery.status);
+  const isFailed = delivery.status === "failed";
+
+  // "failed" is a side-branch, not a stage in STAGE_ORDER. For failed deliveries, derive the
+  // last stage actually reached from its recorded timestamps so completed progress still
+  // renders correctly instead of collapsing to "nothing completed".
+  let currentIndex;
+  if (isFailed) {
+    currentIndex = -1;
+    STAGE_ORDER.forEach((stage, index) => {
+      if (delivery.statusTimestamps?.[stage.timestampField]) currentIndex = index;
+    });
+  } else {
+    currentIndex = STAGE_ORDER.findIndex((s) => s.key === delivery.status);
+  }
 
   STAGE_ORDER.forEach((stage, index) => {
     const li = document.createElement("li");
     li.dataset.testid = `timeline-stage-${stage.key}`;
 
-    const isCompleted = index < currentIndex || (index === currentIndex && delivery.status !== "failed");
-    const isCurrent = index === currentIndex;
+    const isCompleted = index < currentIndex || (index === currentIndex && !isFailed);
+    const isCurrent = index === currentIndex && !isFailed;
 
-    if (isCompleted) li.classList.add("completed");
+    if (isCompleted || (isFailed && index <= currentIndex)) li.classList.add("completed");
     if (isCurrent) li.classList.add("current");
 
     const label = document.createElement("span");
@@ -454,6 +558,8 @@ function updateEtaAndProgress(snapshot) {
   setEtaCountdownTarget(Date.now() + snapshot.etaRemainingSeconds * 1000);
   const progressPercent = Math.round(snapshot.progress * 100);
   mapEl.progressFill.style.width = `${progressPercent}%`;
+  mapEl.progress?.setAttribute("aria-valuenow", String(progressPercent));
+  mapEl.progress?.setAttribute("aria-valuetext", `${progressPercent}% of the route complete`);
 }
 
 /**
@@ -468,6 +574,16 @@ function setEtaCountdownTarget(targetMs) {
   el.etaCountdownLabel.hidden = false;
   el.etaCountdownDetail.hidden = false;
   tickEtaCountdown();
+}
+
+/**
+ * Time-state language (FR-B2). The ETA is a fixed estimate, not a live recalculation, so
+ * once it elapses the UI must say so honestly instead of sitting at "0s" indefinitely.
+ */
+function etaDisplayState(remainingSeconds) {
+  if (remainingSeconds <= 0) return { label: "Arriving in", text: "ETA passed — driver is still on the way" };
+  if (remainingSeconds <= 60) return { label: "Arriving in", text: "Arriving soon" };
+  return { label: "Arriving in", text: formatCountdown(remainingSeconds) };
 }
 
 function hideEtaCountdown() {
@@ -485,14 +601,23 @@ function tickEtaCountdown() {
 
   const render = () => {
     if (etaTargetMs === null) return;
-    const remainingSeconds = Math.max(0, Math.round((etaTargetMs - Date.now()) / 1000));
-    const formatted = formatCountdown(remainingSeconds);
-    mapEl.etaCountdown.textContent = formatted;
-    el.etaCountdownDetail.textContent = formatted;
+    const remainingSeconds = Math.round((etaTargetMs - Date.now()) / 1000);
+    const { text } = etaDisplayState(remainingSeconds);
+    mapEl.etaCountdown.textContent = text;
+    el.etaCountdownDetail.textContent = text;
+
+    // Once the estimate has elapsed the value no longer changes each second, so stop the
+    // interval instead of repainting the same overdue message forever.
+    if (remainingSeconds <= 0 && etaCountdownTimer) {
+      clearInterval(etaCountdownTimer);
+      etaCountdownTimer = null;
+    }
   };
 
   render();
-  etaCountdownTimer = setInterval(render, 1000);
+  if (etaTargetMs !== null && etaTargetMs - Date.now() > 0) {
+    etaCountdownTimer = setInterval(render, 1000);
+  }
 }
 
 function formatCountdown(totalSeconds) {
@@ -518,9 +643,11 @@ function updateDriverCard(delivery) {
   mapEl.productName.textContent = delivery.productName || "";
 }
 
-async function refreshMapSnapshot(trackingNumber) {
+async function refreshMapSnapshot(trackingNumber, generation = lookupGeneration) {
   try {
     const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(trackingNumber)}/location`);
+    if (generation !== lookupGeneration) return;
+
     if (res.status === 204) {
       // Not currently out_for_delivery — nothing to show yet, or delivery has completed.
       hideMap();
@@ -528,9 +655,15 @@ async function refreshMapSnapshot(trackingNumber) {
     }
     if (!res.ok) return;
     const snapshot = await res.json();
+    if (generation !== lookupGeneration) return;
+    mapEl.fallback.hidden = true;
     renderRoute(snapshot);
   } catch {
-    // Non-critical — the rest of the tracking UI still works without the map.
+    // Non-critical — the rest of the tracking UI still works without the map, but say so.
+    if (!mapEl.section.hidden) {
+      mapEl.fallback.textContent = "Live map is temporarily unavailable. Status and ETA are still up to date.";
+      mapEl.fallback.hidden = false;
+    }
   }
 }
 
@@ -561,15 +694,34 @@ async function loadHistoryTimeline(trackingNumber) {
 
 // --- CUST-2: Real-time updates via SSE ---
 
-function subscribeToUpdates(trackingNumber) {
+function closeEventStream() {
   if (currentEventSource) {
     currentEventSource.close();
+    currentEventSource = null;
   }
+}
+
+function subscribeToUpdates(trackingNumber, generation = lookupGeneration) {
+  closeEventStream();
 
   const url = `${API_BASE}/events?channel=tracking&trackingNumber=${encodeURIComponent(trackingNumber)}`;
-  currentEventSource = new EventSource(url);
+  const source = new EventSource(url);
+  currentEventSource = source;
+  let hasConnected = false;
 
-  currentEventSource.onmessage = async (messageEvent) => {
+  source.onopen = async () => {
+    if (generation !== lookupGeneration) return;
+    setConnectionState("live");
+    // On a reconnect, events emitted while disconnected were missed, so re-sync from the
+    // authoritative snapshots rather than trusting the current on-screen state.
+    if (hasConnected) await refreshAuthoritativeState(trackingNumber, generation);
+    hasConnected = true;
+  };
+
+  source.onmessage = async (messageEvent) => {
+    if (generation !== lookupGeneration) return;
+    setConnectionState("live");
+
     let domainEvent;
     try {
       domainEvent = JSON.parse(messageEvent.data);
@@ -578,27 +730,38 @@ function subscribeToUpdates(trackingNumber) {
     }
 
     // locationUpdated events drive smooth marker movement without re-fetching the whole
-    // delivery record on every tick (the simulator ticks every ~1.5s).
+    // delivery record on every tick (the simulator ticks every ~1.2s).
     if (domainEvent?.eventType === "locationUpdated") {
       renderRoute(domainEvent.payload);
       return;
     }
 
     // Any other event (statusChanged, assignmentChanged, deliveryFailed) means something
-    // structural changed — refetch the full view (and the map snapshot, since a status
-    // change may start/stop the simulated route).
-    const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(trackingNumber)}`);
-    if (res.ok) {
-      const delivery = await res.json();
-      renderDelivery(delivery);
-      recordLookup(delivery.trackingNumber, delivery.status);
-      await refreshMapSnapshot(trackingNumber);
-    }
+    // structural changed — refetch the full view and the map snapshot, since a status
+    // change may start, restart, or stop the simulated route.
+    await refreshAuthoritativeState(trackingNumber, generation);
   };
 
-  currentEventSource.onerror = () => {
-    // EventSource auto-reconnects by default; nothing else required here.
+  source.onerror = () => {
+    if (generation !== lookupGeneration) return;
+    // EventSource reconnects natively; surface the interim state so the customer knows the
+    // view may be briefly out of date.
+    setConnectionState(source.readyState === EventSource.CLOSED ? "offline" : "reconnecting");
   };
+}
+
+async function refreshAuthoritativeState(trackingNumber, generation) {
+  try {
+    const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(trackingNumber)}`);
+    if (!res.ok || generation !== lookupGeneration) return;
+    const delivery = await res.json();
+    if (generation !== lookupGeneration) return;
+    renderDelivery(delivery);
+    recordLookup(delivery.trackingNumber, delivery.status);
+    await refreshMapSnapshot(trackingNumber, generation);
+  } catch {
+    setConnectionState("reconnecting");
+  }
 }
 
 // --- CUST-3: Request note submission ---
@@ -608,7 +771,9 @@ el.noteForm.addEventListener("submit", async (e) => {
   const trackingNumber = el.noteForm.dataset.trackingNumber;
   if (!trackingNumber) return;
 
-  const note = el.noteSelect.value || el.noteTextarea.value.trim();
+  // The textarea is the single source of truth (FR-B4). Presets only populate it, so a
+  // customer's own edit is never silently replaced by a stale <select> value.
+  const note = el.noteTextarea.value.trim();
 
   try {
     const res = await fetch(`${API_BASE}/deliveries/lookup/${encodeURIComponent(trackingNumber)}/note`, {
@@ -636,6 +801,14 @@ el.noteSelect.addEventListener("change", () => {
   }
 });
 
+// Typing custom wording clears the preset selection so the two controls can never disagree
+// about what will actually be saved.
+el.noteTextarea.addEventListener("input", () => {
+  if (el.noteSelect.value && el.noteTextarea.value !== el.noteSelect.value) {
+    el.noteSelect.value = "";
+  }
+});
+
 function showNoteFeedback(message, success) {
   el.noteFeedback.textContent = message;
   el.noteFeedback.style.color = success ? "#16a34a" : "#dc2626";
@@ -645,3 +818,5 @@ function showNoteFeedback(message, success) {
 // --- Init ---
 
 renderHistory();
+// Refresh stored statuses so returning visitors never see stale "In progress" labels.
+void refreshRecentLookupStatuses();

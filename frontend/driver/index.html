@@ -19,7 +19,7 @@
         <input type="password" id="password-input" data-testid="login-password-input" autocomplete="current-password" required />
 
         <button type="submit" data-testid="login-submit-button">Log In</button>
-        <p id="login-error" class="error-message" data-testid="login-error-message" hidden></p>
+        <p id="login-error" class="error-message" data-testid="login-error-message" role="alert" hidden></p>
       </form>
     </div>
   </section>
@@ -28,8 +28,11 @@
   <section id="list-screen" class="screen" data-testid="list-screen" hidden>
     <header class="list-header" data-testid="remaining-count-header">
       <span id="remaining-count" data-testid="remaining-count-label">0 deliveries remaining</span>
+      <span id="connection-status" class="connection-status" data-testid="connection-status" data-state="idle" role="status">Live</span>
       <button id="logout-button" data-testid="logout-button" class="secondary-button">Log Out</button>
     </header>
+
+    <p id="list-live-region" class="visually-hidden" data-testid="list-live-region" role="status" aria-live="polite"></p>
 
     <div class="filter-row" data-testid="status-filter-row">
       <button class="filter-button active" data-status="" data-testid="filter-all-button">All</button>
@@ -39,6 +42,10 @@
       <button class="filter-button" data-status="failed" data-testid="filter-failed-button">Failed</button>
     </div>
 
+    <p id="list-loading-message" class="info-message" data-testid="list-loading-message" role="status" hidden>
+      Loading your deliveries…
+    </p>
+    <p id="list-error-message" class="error-message" data-testid="list-error-message" role="alert" hidden></p>
     <ul id="delivery-list" class="delivery-list" data-testid="delivery-list"></ul>
     <p id="list-empty-message" class="info-message" data-testid="list-empty-message" hidden>No deliveries match this filter.</p>
   </section>
@@ -69,9 +76,17 @@
   </section>
 
   <!-- DRV-3: Completion modal -->
-  <div id="complete-modal" class="modal" data-testid="complete-modal" hidden>
+  <div
+    id="complete-modal"
+    class="modal"
+    data-testid="complete-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="complete-modal-title"
+    hidden
+  >
     <div class="modal-content">
-      <h2>Complete Delivery</h2>
+      <h2 id="complete-modal-title">Complete Delivery</h2>
       <form id="complete-form" data-testid="complete-form">
         <label for="receipt-method-select">Receipt method</label>
         <select id="receipt-method-select" data-testid="receipt-method-select" required>
@@ -94,9 +109,17 @@
   </div>
 
   <!-- DRV-4: Failure modal -->
-  <div id="fail-modal" class="modal" data-testid="fail-modal" hidden>
+  <div
+    id="fail-modal"
+    class="modal"
+    data-testid="fail-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="fail-modal-title"
+    hidden
+  >
     <div class="modal-content">
-      <h2>Report Delivery Failure</h2>
+      <h2 id="fail-modal-title">Report Delivery Failure</h2>
       <form id="fail-form" data-testid="fail-form">
         <label for="failure-reason-select">Reason</label>
         <select id="failure-reason-select" data-testid="failure-reason-select" required>
@@ -108,7 +131,7 @@
         </select>
 
         <label for="failure-memo-input">Memo (optional)</label>
-        <textarea id="failure-memo-input" data-testid="failure-memo-input" rows="2"></textarea>
+        <textarea id="failure-memo-input" data-testid="failure-memo-input" rows="2" maxlength="300"></textarea>
 
         <p class="confirm-text">Are you sure? This will mark the delivery as a re-delivery target.</p>
 

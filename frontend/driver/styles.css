@@ -116,13 +116,18 @@ button {
   z-index: 10;
 }
 
+/* Keeps the 44px minimum target requirement while staying visually compact. */
 .list-header .secondary-button {
   background: transparent;
   color: white;
   border: 1px solid white;
-  min-height: 36px;
-  padding: 0.4rem 0.8rem;
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
   font-size: 0.85rem;
+}
+
+.list-header {
+  gap: 0.5rem;
 }
 
 .filter-row {
@@ -157,17 +162,98 @@ button {
 }
 
 .delivery-list li {
+  margin-bottom: 0.75rem;
+}
+
+/* Each stop is a real button: keyboard operable, screen-reader actionable, and comfortably
+   sized for one-handed use (WCAG 2.5.8). */
+.delivery-item-button {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: white;
+  color: inherit;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1rem;
-  margin-bottom: 0.75rem;
-  cursor: pointer;
   min-height: 44px;
+  font-size: 1rem;
+  font-weight: 400;
+  cursor: pointer;
 }
 
-.delivery-list li:active {
+.delivery-item-button:active {
   background: var(--color-bg);
+}
+
+.delivery-item-button:hover {
+  opacity: 1;
+  border-color: var(--color-primary);
+}
+
+.delivery-item-note {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.delivery-item-chip-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.redelivery-chip {
+  background: var(--color-danger);
+}
+
+:focus-visible {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.connection-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.connection-status[data-state="idle"] {
+  display: none;
+}
+
+.connection-status[data-state="live"] {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.connection-status[data-state="reconnecting"] {
+  background: #fef7e0;
+  color: #a56300;
+}
+
+.connection-status[data-state="offline"] {
+  background: #fce8e6;
+  color: #c5221f;
 }
 
 .delivery-item-title {
@@ -292,4 +378,12 @@ button {
 
 .modal-actions button {
   flex: 1;
+}
+
+/* WCAG 2.3.3 / 2.2.2 — honor reduced-motion preferences for non-essential transitions. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -38,11 +38,17 @@ export class RealtimeService {
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
-    // Initial comment to open the stream promptly for clients waiting on first byte.
+    // Initial metadata and comment open the stream promptly and guide native reconnects.
+    res.write("retry: 2000\n");
     res.write(": connected\n\n");
 
     const id = nextConnectionId++;
-    this.connections.set(id, { id, res, channel });
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, 15_000);
+    heartbeat.unref?.();
+
+    this.connections.set(id, { id, res, channel, heartbeat });
 
     res.on("close", () => this.removeConnection(id));
 
@@ -50,6 +56,8 @@ export class RealtimeService {
   }
 
   removeConnection(connectionId: number): void {
+    const connection = this.connections.get(connectionId);
+    if (connection) clearInterval(connection.heartbeat);
     this.connections.delete(connectionId);
   }
 

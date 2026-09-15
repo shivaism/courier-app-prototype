@@ -78,6 +78,63 @@ button:hover {
   opacity: 0.9;
 }
 
+/* WCAG 2.4.7 Focus Visible — a clearly visible, non-time-limited focus indicator. */
+:focus-visible {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.field-hint {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
+/* Realtime connection state (MDN SSE guidance: surface connection health to the user). */
+.connection-status {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.connection-status[data-state="idle"] {
+  display: none;
+}
+
+.connection-status[data-state="live"] {
+  background: #e6f4ea;
+  color: #137333;
+  border-color: #ceead6;
+}
+
+.connection-status[data-state="reconnecting"] {
+  background: #fef7e0;
+  color: #a56300;
+  border-color: #fde293;
+}
+
+.connection-status[data-state="offline"] {
+  background: #fce8e6;
+  color: #c5221f;
+  border-color: #f6aea9;
+}
+
 .error-message {
   color: var(--color-danger);
   margin-top: 0.75rem;
@@ -475,18 +532,32 @@ button:hover {
 }
 
 .history-list li {
+  margin-bottom: 0.5rem;
+}
+
+/* Recent lookups are real buttons so they are keyboard operable and screen-reader
+   announced, and meet WCAG 2.5.8 minimum target size. */
+.history-item-button {
+  width: 100%;
+  min-height: 44px;
   padding: 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  margin-bottom: 0.5rem;
+  background: white;
+  color: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  text-align: left;
 }
 
-.history-list li:hover {
+.history-item-button:hover {
   background: var(--color-bg);
+  opacity: 1;
 }
 
 .history-badge {
@@ -499,4 +570,65 @@ button:hover {
 
 .history-badge.completed {
   background: var(--color-success);
+}
+
+.history-badge.stale {
+  background: #6b7280;
+}
+
+/* Narrow-screen reflow so the tracking journey stays usable one-handed on phones. */
+@media (max-width: 560px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .lookup-row {
+    flex-direction: column;
+  }
+
+  .lookup-row button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .delivery-summary {
+    grid-template-columns: 1fr;
+    gap: 0.15rem 0;
+  }
+
+  .delivery-summary dd {
+    margin-bottom: 0.6rem;
+  }
+
+  .live-map-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .live-map-eta-card {
+    align-items: flex-start;
+  }
+
+  .live-map-canvas {
+    height: 260px;
+  }
+
+  .live-map-product-chip {
+    max-width: 100%;
+  }
+
+  .live-map-ad-card {
+    flex-wrap: wrap;
+  }
+}
+
+/* WCAG 2.3.3 / 2.2.2 — suppress non-essential motion when the user prefers reduced motion.
+   Vehicle position still updates; only the animated easing is removed. */
+@media (prefers-reduced-motion: reduce) {
+  .vehicle-icon-wrapper,
+  .vehicle-inner,
+  .live-map-progress-fill {
+    transition: none !important;
+  }
 }

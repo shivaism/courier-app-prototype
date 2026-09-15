@@ -29,6 +29,8 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
   const driverOnly = requireAuth(ctx.auth, ["driver"]);
   const adminOnly = requireAuth(ctx.auth, ["admin"]);
   const driverOrAdmin = requireAuth(ctx.auth, ["driver", "admin"]);
+  const adminView = (delivery: import("../domain/types.js").Delivery) =>
+    toAdminDeliveryView(delivery, ctx.delivery.getOperationalMeta(delivery.id));
 
   // --- Customer routes (public, no auth — identified only by tracking number) ---
 
@@ -92,17 +94,29 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
   router.get("/driver/deliveries", driverOnly, (req, res) => {
     const driverId = req.actor!.actorId;
     const status = req.query.status as DeliveryStatus | undefined;
-    const deliveries = ctx.delivery.listDeliveries({ driverId, status });
-    res.json(deliveries.map(toDriverDeliveryView));
+    // Delivery order is the driver's stop sequence: oldest-assigned first (FR-B9). The order
+    // is computed over the driver's whole route so numbers stay stable under status filters.
+    const routeOrder = new Map(
+      ctx.delivery
+        .listDeliveries({ driverId })
+        .slice()
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id)
+        .map((delivery, index) => [delivery.id, index + 1])
+    );
+    const deliveries = ctx.delivery
+      .listDeliveries({ driverId, status })
+      .slice()
+      .sort((a, b) => (routeOrder.get(a.id) ?? 0) - (routeOrder.get(b.id) ?? 0));
+    res.json(deliveries.map((d) => toDriverDeliveryView(d, routeOrder.get(d.id) ?? null)));
   });
 
   router.get("/driver/deliveries/:id", driverOnly, (req, res) => {
-    const delivery = ctx.delivery.getDeliveryById(Number(req.params.id));
-    if (!delivery || delivery.driverId !== req.actor!.actorId) {
-      res.status(404).json({ error: "Delivery not found" });
-      return;
+    try {
+      const delivery = ctx.delivery.getDeliveryForDriver(Number(req.params.id), req.actor!.actorId);
+      res.json(toDriverDeliveryView(delivery));
+    } catch (err) {
+      handleServiceError(err, res);
     }
-    res.json(toDriverDeliveryView(delivery));
   });
 
   // DRV-3: advance status
@@ -113,6 +127,7 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
       return;
     }
     try {
+      ctx.delivery.getDeliveryForDriver(Number(req.params.id), req.actor!.actorId);
       const updated = ctx.delivery.updateStatus(
         Number(req.params.id),
         status as DeliveryStatus,
@@ -128,6 +143,7 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
   router.post("/driver/deliveries/:id/complete", driverOnly, (req, res) => {
     const { receiptMethod, proofOfDeliveryPhotoUrl } = req.body ?? {};
     try {
+      ctx.delivery.getDeliveryForDriver(Number(req.params.id), req.actor!.actorId);
       const updated = ctx.delivery.completeDelivery(
         Number(req.params.id),
         { receiptMethod: receiptMethod as ReceiptMethod, proofOfDeliveryPhotoUrl },
@@ -143,6 +159,7 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
   router.post("/driver/deliveries/:id/fail", driverOnly, (req, res) => {
     const { reason, memo } = req.body ?? {};
     try {
+      ctx.delivery.getDeliveryForDriver(Number(req.params.id), req.actor!.actorId);
       const updated = ctx.delivery.reportFailure(
         Number(req.params.id),
         reason as FailureReason,
@@ -159,21 +176,25 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
 
   // ADM-2 / ADM-5: monitoring dashboard + history list, filterable
   router.get("/admin/deliveries", adminOnly, (req, res) => {
-    const { status, campId, driverId, dateFrom, dateTo } = req.query;
+    const { status, campId, driverId, dateFrom, dateTo, history } = req.query;
+    const historyOnly = history === "true";
+    const normalizedDateFrom = dateFrom ? `${String(dateFrom)}T00:00:00.000Z` : undefined;
+    const normalizedDateTo = dateTo ? `${String(dateTo)}T23:59:59.999Z` : undefined;
     const deliveries = ctx.delivery.listDeliveries({
       status: status as DeliveryStatus | undefined,
       campId: campId ? Number(campId) : undefined,
       driverId: driverId ? Number(driverId) : undefined,
-      dateFrom: dateFrom as string | undefined,
-      dateTo: dateTo as string | undefined,
+      dateFrom: historyOnly ? normalizedDateFrom : (dateFrom as string | undefined),
+      dateTo: historyOnly ? normalizedDateTo : (dateTo as string | undefined),
+      historyOnly,
     });
-    res.json(deliveries.map((d) => toAdminDeliveryView(d)));
+    res.json(deliveries.map(adminView));
   });
 
   // ADM-3: unassigned / re-delivery-target list
   router.get("/admin/deliveries/unassigned", adminOnly, (_req, res) => {
     const deliveries = ctx.delivery.listUnassignedDeliveries();
-    res.json(deliveries.map((d) => toAdminDeliveryView(d)));
+    res.json(deliveries.map(adminView));
   });
 
   router.get("/admin/deliveries/:id/history", adminOnly, (req, res) => {
@@ -190,7 +211,7 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
     }
     try {
       const updated = ctx.delivery.assignDriver(Number(req.params.id), Number(driverId), `admin:${req.actor!.actorId}`);
-      res.json(toAdminDeliveryView(updated));
+      res.json(adminView(updated));
     } catch (err) {
       handleServiceError(err, res);
     }
@@ -201,7 +222,7 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
     const { productName, address, campId, requestNote } = req.body ?? {};
     try {
       const created = ctx.delivery.createDelivery({ productName, address, campId: Number(campId), requestNote });
-      res.status(201).json(toAdminDeliveryView(created));
+      res.status(201).json(adminView(created));
     } catch (err) {
       handleServiceError(err, res);
     }
@@ -215,9 +236,14 @@ export function createDeliveryRoutes(ctx: AppContext): Router {
       return;
     }
     if (req.actor!.actorType === "driver") {
-      res.json(toDriverDeliveryView(delivery));
+      try {
+        const owned = ctx.delivery.getDeliveryForDriver(delivery.id, req.actor!.actorId);
+        res.json(toDriverDeliveryView(owned));
+      } catch (err) {
+        handleServiceError(err, res);
+      }
     } else {
-      res.json(toAdminDeliveryView(delivery));
+      res.json(adminView(delivery));
     }
   });
 

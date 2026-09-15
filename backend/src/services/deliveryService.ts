@@ -18,6 +18,15 @@ import type { MasterDataService } from "./masterDataService.js";
 
 // Fixed ETA offset (BR-6): a simple, static computed value, not a real-time recalculation engine.
 const ETA_OFFSET_HOURS = 2;
+const MAX_NOTE_LENGTH = 500;
+const MAX_MEMO_LENGTH = 300;
+const ALLOWED_RECEIPT_METHODS = new Set<ReceiptMethod>(["in_person", "at_door", "security_desk", "other"]);
+const ALLOWED_FAILURE_REASONS = new Set<FailureReason>([
+  "recipient_absent",
+  "bad_address",
+  "receipt_refused",
+  "other",
+]);
 
 export interface CreateDeliveryInput {
   productName: string;
@@ -32,6 +41,13 @@ export interface DeliveryFilter {
   driverId?: number;
   dateFrom?: string;
   dateTo?: string;
+  historyOnly?: boolean;
+}
+
+export interface DeliveryOperationalMeta {
+  lastStatusChangeAt: string | null;
+  outcomeAt: string | null;
+  isDelayed: boolean;
 }
 
 function toDelivery(row: any): Delivery {
@@ -82,6 +98,9 @@ export class DeliveryService {
     if (!input.productName?.trim() || !input.address?.trim() || !input.campId) {
       throw new ValidationError("productName, address, and campId are required");
     }
+    if (input.requestNote && input.requestNote.length > MAX_NOTE_LENGTH) {
+      throw new ValidationError(`requestNote must be ${MAX_NOTE_LENGTH} characters or fewer`);
+    }
 
     const camp = this.masterData.getCampById(input.campId);
     if (!camp) {
@@ -122,7 +141,14 @@ export class DeliveryService {
   listDeliveries(filter: DeliveryFilter = {}): Delivery[] {
     const clauses: string[] = [];
     const params: unknown[] = [];
+    const outcomeExpression = `COALESCE(deliveredAt, (
+      SELECT MAX(sh.changedAt) FROM status_history sh
+      WHERE sh.deliveryId = deliveries.id AND sh.status = 'failed'
+    ))`;
 
+    if (filter.historyOnly) {
+      clauses.push("status IN ('delivered', 'failed')");
+    }
     if (filter.status) {
       clauses.push("status = ?");
       params.push(filter.status);
@@ -136,17 +162,49 @@ export class DeliveryService {
       params.push(filter.driverId);
     }
     if (filter.dateFrom) {
-      clauses.push("createdAt >= ?");
+      clauses.push(`${filter.historyOnly ? outcomeExpression : "createdAt"} >= ?`);
       params.push(filter.dateFrom);
     }
     if (filter.dateTo) {
-      clauses.push("createdAt <= ?");
+      clauses.push(`${filter.historyOnly ? outcomeExpression : "createdAt"} <= ?`);
       params.push(filter.dateTo);
     }
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-    const rows = this.db.prepare(`SELECT * FROM deliveries ${where} ORDER BY createdAt DESC`).all(...params);
+    const orderBy = filter.historyOnly ? `${outcomeExpression} DESC` : "createdAt DESC";
+    const rows = this.db.prepare(`SELECT * FROM deliveries ${where} ORDER BY ${orderBy}`).all(...params);
     return rows.map(toDelivery);
+  }
+
+  getOperationalMeta(deliveryId: number): DeliveryOperationalMeta {
+    const delivery = this.getDeliveryById(deliveryId);
+    if (!delivery) throw new NotFoundError(`Delivery ${deliveryId} not found`);
+
+    const latest = this.db
+      .prepare(`SELECT changedAt FROM status_history WHERE deliveryId = ? ORDER BY changedAt DESC, id DESC LIMIT 1`)
+      .get(deliveryId) as { changedAt: string } | undefined;
+    const failedOutcome = this.db
+      .prepare(`SELECT changedAt FROM status_history WHERE deliveryId = ? AND status = 'failed' ORDER BY changedAt DESC, id DESC LIMIT 1`)
+      .get(deliveryId) as { changedAt: string } | undefined;
+
+    const outcomeAt = delivery.status === "delivered" ? delivery.deliveredAt : delivery.status === "failed" ? failedOutcome?.changedAt ?? null : null;
+    const isDelayed =
+      delivery.status === "out_for_delivery" && !!delivery.eta && new Date(delivery.eta).getTime() < Date.now();
+
+    return {
+      lastStatusChangeAt: latest?.changedAt ?? null,
+      outcomeAt,
+      isDelayed,
+    };
+  }
+
+  getDeliveryForDriver(deliveryId: number, driverId: number): Delivery {
+    const delivery = this.getDeliveryById(deliveryId);
+    if (!delivery || delivery.driverId !== driverId) {
+      // Use not-found semantics so IDs cannot be used to probe another driver's workload.
+      throw new NotFoundError(`Delivery ${deliveryId} not found`);
+    }
+    return delivery;
   }
 
   listUnassignedDeliveries(): Delivery[] {
@@ -213,8 +271,20 @@ export class DeliveryService {
         `Delivery must be "out_for_delivery" to complete (current status: ${delivery.status})`
       );
     }
-    if (!details.receiptMethod || !details.proofOfDeliveryPhotoUrl?.trim()) {
-      throw new ValidationError("receiptMethod and proofOfDeliveryPhotoUrl are required to complete a delivery");
+    if (!ALLOWED_RECEIPT_METHODS.has(details.receiptMethod)) {
+      throw new ValidationError("receiptMethod must be one of: in_person, at_door, security_desk, other");
+    }
+    if (!details.proofOfDeliveryPhotoUrl?.trim()) {
+      throw new ValidationError("proofOfDeliveryPhotoUrl is required to complete a delivery");
+    }
+    let proofUrl: URL;
+    try {
+      proofUrl = new URL(details.proofOfDeliveryPhotoUrl);
+    } catch {
+      throw new ValidationError("proofOfDeliveryPhotoUrl must be a valid HTTP(S) URL");
+    }
+    if (!['http:', 'https:'].includes(proofUrl.protocol)) {
+      throw new ValidationError("proofOfDeliveryPhotoUrl must use HTTP or HTTPS");
     }
 
     const now = new Date().toISOString();
@@ -256,8 +326,11 @@ export class DeliveryService {
         `Delivery must be "out_for_delivery" to report a failure (current status: ${delivery.status})`
       );
     }
-    if (!reason) {
-      throw new ValidationError("failureReason is required");
+    if (!ALLOWED_FAILURE_REASONS.has(reason)) {
+      throw new ValidationError("failureReason must be one of: recipient_absent, bad_address, receipt_refused, other");
+    }
+    if (memo && memo.length > MAX_MEMO_LENGTH) {
+      throw new ValidationError(`failureMemo must be ${MAX_MEMO_LENGTH} characters or fewer`);
     }
 
     this.db
@@ -288,6 +361,10 @@ export class DeliveryService {
     const delivery = this.getDeliveryByTrackingNumber(trackingNumber);
     if (!delivery) throw new NotFoundError(`Delivery with tracking number ${trackingNumber} not found`);
 
+    if (note.length > MAX_NOTE_LENGTH) {
+      throw new ValidationError(`requestNote must be ${MAX_NOTE_LENGTH} characters or fewer`);
+    }
+
     if (NOTE_LOCKED_STATUSES.includes(delivery.status)) {
       throw new ValidationError(
         `Request note can no longer be edited — delivery status is "${delivery.status}"`
@@ -314,11 +391,17 @@ export class DeliveryService {
     const wasFailed = delivery.status === "failed";
 
     if (wasFailed) {
+      const now = new Date().toISOString();
+      const etaDate = new Date(now);
+      etaDate.setHours(etaDate.getHours() + ETA_OFFSET_HOURS);
       this.db
         .prepare(
-          `UPDATE deliveries SET driverId = ?, status = 'out_for_delivery', isRedeliveryTarget = 0 WHERE id = ?`
+          `UPDATE deliveries
+           SET driverId = ?, status = 'out_for_delivery', isRedeliveryTarget = 0,
+               failureReason = NULL, failureMemo = NULL, outForDeliveryAt = ?, eta = ?
+           WHERE id = ?`
         )
-        .run(driverId, deliveryId);
+        .run(driverId, now, etaDate.toISOString(), deliveryId);
       this.writeStatusHistory(deliveryId, "out_for_delivery", actor);
     } else {
       this.db.prepare(`UPDATE deliveries SET driverId = ? WHERE id = ?`).run(driverId, deliveryId);
@@ -331,6 +414,16 @@ export class DeliveryService {
       driverId: updated.driverId,
       payload: { driverId: updated.driverId, status: updated.status },
     });
+    if (wasFailed) {
+      // A failed-delivery reassignment is also a fresh out-for-delivery attempt. Publishing
+      // statusChanged restarts the location simulator and refreshes recipient ETA/map state.
+      eventBus.publish({
+        eventType: "statusChanged",
+        trackingNumber: updated.trackingNumber,
+        driverId: updated.driverId,
+        payload: { status: updated.status, eta: updated.eta, redeliveryAttempt: true },
+      });
+    }
 
     return updated;
   }

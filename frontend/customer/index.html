@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
   <title>Track Your Delivery</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -29,7 +30,10 @@
           <button type="submit" data-testid="lookup-submit-button">Track</button>
         </div>
       </form>
-      <p id="lookup-error" class="error-message" data-testid="lookup-error-message" hidden></p>
+      <p id="lookup-error" class="error-message" data-testid="lookup-error-message" role="alert" hidden></p>
+      <p id="lookup-loading" class="info-message" data-testid="lookup-loading-message" role="status" hidden>
+        Looking up your delivery…
+      </p>
     </section>
 
     <!-- Result panel (populated after a successful lookup) -->
@@ -37,7 +41,17 @@
       <div class="status-badge-row">
         <span id="status-badge" class="status-badge" data-testid="delivery-status-badge">—</span>
         <span id="tracking-number-display" data-testid="delivery-tracking-number-display"></span>
+        <span
+          id="connection-status"
+          class="connection-status"
+          data-testid="connection-status"
+          data-state="idle"
+          role="status"
+        >Live</span>
       </div>
+
+      <!-- Announces status/ETA changes to assistive technology without moving focus (WCAG 4.1.3) -->
+      <p id="delivery-live-region" class="visually-hidden" data-testid="delivery-live-region" role="status" aria-live="polite"></p>
 
       <dl class="delivery-summary">
         <dt>Product</dt>
@@ -62,9 +76,24 @@
           </div>
         </div>
 
-        <div id="live-map-canvas" class="live-map-canvas" data-testid="live-map-canvas"></div>
+        <div
+          id="live-map-canvas"
+          class="live-map-canvas"
+          data-testid="live-map-canvas"
+          role="img"
+          aria-label="Live map showing your delivery vehicle position and route"
+        ></div>
+        <p id="live-map-fallback" class="info-message" data-testid="live-map-fallback" hidden></p>
 
-        <div class="live-map-progress-track">
+        <div
+          class="live-map-progress-track"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+          aria-label="Delivery route progress"
+          id="live-map-progress"
+        >
           <div id="live-map-progress-fill" class="live-map-progress-fill" data-testid="live-map-progress-fill"></div>
         </div>
 
@@ -144,10 +173,13 @@
           id="note-textarea"
           data-testid="request-note-textarea"
           rows="3"
+          maxlength="500"
+          aria-describedby="note-hint"
           placeholder="e.g. Please leave with the front desk"
         ></textarea>
+        <p class="field-hint" id="note-hint">Presets fill the box below. Your own wording always takes priority.</p>
         <button type="submit" data-testid="request-note-save-button">Save Note</button>
-        <p id="note-feedback" class="feedback-message" data-testid="request-note-feedback" hidden></p>
+        <p id="note-feedback" class="feedback-message" data-testid="request-note-feedback" role="status" hidden></p>
       </form>
     </section>
 

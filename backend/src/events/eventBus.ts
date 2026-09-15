@@ -20,4 +20,4 @@ export const eventBus = new DomainEventBus();
 // Raised from the default of 10: in production only one AppContext (and therefore one
 // RealtimeService + one LocationSimulatorService) subscribes per process, but the test
 // suite creates many short-lived AppContexts in the same process, each adding a listener.
-eventBus.setMaxListeners(50);
+eventBus.setMaxListeners(500);

@@ -94,6 +94,9 @@ export class MasterDataService {
     const name = input.name ?? driver.name;
     const assignedArea = input.assignedArea ?? driver.assignedArea;
     const contact = input.contact ?? driver.contact;
+    if (!name.trim() || !assignedArea.trim() || !contact.trim()) {
+      throw new ValidationError("name, assignedArea, and contact cannot be empty");
+    }
 
     this.db
       .prepare(`UPDATE drivers SET name = ?, assignedArea = ?, contact = ? WHERE id = ?`)
@@ -160,6 +163,13 @@ export class MasterDataService {
     const assignedArea = input.assignedArea ?? camp.assignedArea;
     const latitude = input.latitude ?? camp.latitude;
     const longitude = input.longitude ?? camp.longitude;
+    if (!name.trim() || !assignedArea.trim()) {
+      throw new ValidationError("name and assignedArea cannot be empty");
+    }
+    const duplicate = this.getCampByName(name);
+    if (duplicate && duplicate.id !== campId) {
+      throw new ConflictError(`A camp named "${name}" already exists`);
+    }
 
     this.db
       .prepare(`UPDATE camps SET name = ?, assignedArea = ?, latitude = ?, longitude = ? WHERE id = ?`)
@@ -171,7 +181,12 @@ export class MasterDataService {
     const camp = this.getCampById(campId);
     if (!camp) throw new NotFoundError(`Camp ${campId} not found`);
 
-    // BR-7: no cascade-delete guard beyond what's required by requirements.md.
+    const references = this.db.prepare(`SELECT COUNT(*) AS count FROM deliveries WHERE campId = ?`).get(campId) as {
+      count: number;
+    };
+    if (references.count > 0) {
+      throw new ConflictError("Camp cannot be deleted while deliveries reference it");
+    }
     this.db.prepare(`DELETE FROM camps WHERE id = ?`).run(campId);
   }
 

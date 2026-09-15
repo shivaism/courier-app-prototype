@@ -355,3 +355,160 @@ button {
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--color-border);
 }
+
+/* --- Benchmark upgrades: accessibility, exception emphasis, responsive, reduced motion --- */
+
+:focus-visible {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.connection-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.connection-status[data-state="idle"] {
+  display: none;
+}
+
+.connection-status[data-state="live"] {
+  background: #e6f4ea;
+  color: #137333;
+  border-color: #ceead6;
+}
+
+.connection-status[data-state="reconnecting"] {
+  background: #fef7e0;
+  color: #a56300;
+  border-color: #fde293;
+}
+
+.connection-status[data-state="offline"] {
+  background: #fce8e6;
+  color: #c5221f;
+  border-color: #f6aea9;
+}
+
+/* Delayed is a distinct, truthful state from failed. */
+.aggregate-card.warning {
+  border-color: var(--color-warning);
+  background: #fff7ed;
+}
+
+.aggregate-card.warning .aggregate-count {
+  color: var(--color-warning);
+}
+
+.delivery-card.delayed {
+  border-color: var(--color-warning);
+  background: #fff7ed;
+}
+
+.delivery-card-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.delayed-chip {
+  background: var(--color-warning);
+}
+
+.redelivery-chip {
+  background: var(--color-danger);
+}
+
+.card-action-button {
+  margin-top: 0.75rem;
+  width: 100%;
+  min-height: 44px;
+}
+
+.masterdata-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.masterdata-actions button {
+  min-height: 44px;
+}
+
+#driver-form label,
+#camp-form label {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+/* Reflow multi-column operations layouts on smaller screens instead of compressing them. */
+@media (max-width: 900px) {
+  .aggregate-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .masterdata-columns {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 1rem;
+  }
+
+  .aggregate-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tab-bar {
+    overflow-x: auto;
+  }
+
+  .masterdata-list li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+/* WCAG 2.3.3 / 2.2.2 — the failed-card pulse is decorative, so disable it on request. */
+@media (prefers-reduced-motion: reduce) {
+  .delivery-card.emphasized {
+    animation: none !important;
+  }
+
+  * {
+    transition: none !important;
+  }
+}

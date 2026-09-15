@@ -58,6 +58,8 @@ export interface DriverDeliveryView {
   requestNote: string | null;
   status: string;
   isRedeliveryTarget: boolean;
+  deliveryOrder: number | null; // 1-based stop sequence within the driver's route
+  eta: string | null;
 }
 
 export interface AdminDeliveryView {
@@ -72,6 +74,10 @@ export interface AdminDeliveryView {
   failureReason: string | null;
   failureMemo: string | null;
   lastStatusChangeAt: string | null;
+  outcomeAt: string | null;
+  isDelayed: boolean;
+  eta: string | null;
+  deliveredAt: string | null;
   createdAt: string;
 }
 
@@ -102,7 +108,7 @@ export function toCustomerDeliveryView(delivery: Delivery, driver?: Driver | nul
   };
 }
 
-export function toDriverDeliveryView(delivery: Delivery): DriverDeliveryView {
+export function toDriverDeliveryView(delivery: Delivery, deliveryOrder: number | null = null): DriverDeliveryView {
   return {
     id: delivery.id,
     trackingNumber: delivery.trackingNumber,
@@ -111,10 +117,15 @@ export function toDriverDeliveryView(delivery: Delivery): DriverDeliveryView {
     requestNote: delivery.requestNote,
     status: delivery.status,
     isRedeliveryTarget: delivery.isRedeliveryTarget,
+    deliveryOrder,
+    eta: delivery.eta,
   };
 }
 
-export function toAdminDeliveryView(delivery: Delivery, lastStatusChangeAt: string | null = null): AdminDeliveryView {
+export function toAdminDeliveryView(
+  delivery: Delivery,
+  meta: { lastStatusChangeAt?: string | null; outcomeAt?: string | null; isDelayed?: boolean } = {}
+): AdminDeliveryView {
   return {
     id: delivery.id,
     trackingNumber: delivery.trackingNumber,
@@ -126,7 +137,11 @@ export function toAdminDeliveryView(delivery: Delivery, lastStatusChangeAt: stri
     isRedeliveryTarget: delivery.isRedeliveryTarget,
     failureReason: delivery.failureReason,
     failureMemo: delivery.failureMemo,
-    lastStatusChangeAt,
+    lastStatusChangeAt: meta.lastStatusChangeAt ?? null,
+    outcomeAt: meta.outcomeAt ?? null,
+    isDelayed: meta.isDelayed ?? false,
+    eta: delivery.eta,
+    deliveredAt: delivery.deliveredAt,
     createdAt: delivery.createdAt,
   };
 }

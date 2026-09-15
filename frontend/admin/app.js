@@ -90,7 +90,51 @@ const el = {
   newDeliveryNote: document.getElementById("new-delivery-note"),
   newDeliveryCancelButton: document.getElementById("new-delivery-cancel-button"),
   newDeliveryFeedback: document.getElementById("new-delivery-feedback"),
+
+  connectionStatus: document.getElementById("connection-status"),
+  liveRegion: document.getElementById("admin-live-region"),
+  countDelayed: document.getElementById("count-delayed"),
+  dashboardLoading: document.getElementById("dashboard-loading"),
+  dashboardError: document.getElementById("dashboard-error"),
+  dashboardEmpty: document.getElementById("dashboard-empty"),
+  reassignList: document.getElementById("reassign-list"),
+  reassignEmptyMessage: document.getElementById("reassign-empty-message"),
+  historyLoading: document.getElementById("history-loading"),
+  historyError: document.getElementById("history-error"),
+  historyEmpty: document.getElementById("history-empty"),
+
+  editModal: document.getElementById("edit-modal"),
+  editModalTitle: document.getElementById("edit-modal-title"),
+  editForm: document.getElementById("edit-form"),
+  editFieldDriver: document.getElementById("edit-field-driver"),
+  editFieldCamp: document.getElementById("edit-field-camp"),
+  editDriverName: document.getElementById("edit-driver-name"),
+  editDriverArea: document.getElementById("edit-driver-area"),
+  editDriverContact: document.getElementById("edit-driver-contact"),
+  editCampName: document.getElementById("edit-camp-name"),
+  editCampArea: document.getElementById("edit-camp-area"),
+  editCancelButton: document.getElementById("edit-cancel-button"),
+  editFeedback: document.getElementById("edit-feedback"),
 };
+
+let editTarget = null; // { type: "driver" | "camp", id: number }
+let lastFocusedBeforeModal = null;
+
+const ACTIVE_STATUSES = ["intake", "pickup", "line_haul_loaded", "arrived_at_camp", "out_for_delivery"];
+
+function setConnectionState(state) {
+  el.connectionStatus.dataset.state = state;
+  el.connectionStatus.textContent =
+    state === "live" ? "Live" : state === "reconnecting" ? "Reconnecting…" : state === "offline" ? "Offline" : "";
+}
+
+function announce(message) {
+  el.liveRegion.textContent = message;
+}
+
+function formatTimestamp(value) {
+  return value ? new Date(value).toLocaleString() : "—";
+}
 
 let camps = [];
 let drivers = [];
@@ -136,6 +180,7 @@ function showLogin() {
     eventSource.close();
     eventSource = null;
   }
+  setConnectionState("idle");
 }
 
 function showAppShell() {
@@ -181,17 +226,21 @@ el.tabBar.addEventListener("click", (e) => {
   const button = e.target.closest(".tab-button");
   if (!button) return;
 
-  el.tabBar.querySelectorAll(".tab-button").forEach((b) => b.classList.remove("active"));
+  el.tabBar.querySelectorAll(".tab-button").forEach((b) => {
+    b.classList.remove("active");
+    b.setAttribute("aria-selected", "false");
+  });
   button.classList.add("active");
+  button.setAttribute("aria-selected", "true");
 
   const tabName = button.dataset.tab;
   for (const [name, panel] of Object.entries(el.tabs)) {
     panel.hidden = name !== tabName;
   }
 
-  if (tabName === "assignment") loadUnassigned();
-  if (tabName === "history") loadHistory();
-  if (tabName === "masterdata") loadMasterData();
+  if (tabName === "assignment") void loadUnassigned();
+  if (tabName === "history") void loadHistory();
+  if (tabName === "masterdata") void loadMasterData();
 });
 
 // --- Shared: load camps/drivers for filters and selects ---
@@ -236,14 +285,27 @@ function driverName(driverId) {
 
 // --- ADM-2: Dashboard ---
 
-async function loadDashboard() {
+async function loadDashboard({ silent = false } = {}) {
   const params = new URLSearchParams();
   if (el.dashboardCampFilter.value) params.set("campId", el.dashboardCampFilter.value);
   if (el.dashboardDriverFilter.value) params.set("driverId", el.dashboardDriverFilter.value);
 
-  const res = await apiFetch(`/admin/deliveries?${params.toString()}`);
-  const deliveries = await res.json();
-  renderDashboard(deliveries);
+  if (!silent) el.dashboardLoading.hidden = false;
+  el.dashboardError.hidden = true;
+  try {
+    const res = await apiFetch(`/admin/deliveries?${params.toString()}`);
+    if (!res.ok) {
+      el.dashboardError.textContent = "Could not load deliveries. Please retry.";
+      el.dashboardError.hidden = false;
+      return;
+    }
+    renderDashboard(await res.json());
+  } catch (err) {
+    el.dashboardError.textContent = err?.message || "Could not load deliveries.";
+    el.dashboardError.hidden = false;
+  } finally {
+    el.dashboardLoading.hidden = true;
+  }
 }
 
 el.dashboardCampFilter.addEventListener("change", loadDashboard);
@@ -254,25 +316,38 @@ function renderDashboard(deliveries) {
   const inTransit = deliveries.filter((d) => d.status === "out_for_delivery").length;
   const delivered = deliveries.filter((d) => d.status === "delivered").length;
   const failed = deliveries.filter((d) => d.status === "failed").length;
+  // "Delayed" is a truthful derived state from the server (out for delivery past its ETA),
+  // not an alias for "failed".
+  const delayed = deliveries.filter((d) => d.isDelayed).length;
 
   el.countPending.textContent = pending;
   el.countInTransit.textContent = inTransit;
   el.countDelivered.textContent = delivered;
   el.countFailed.textContent = failed;
+  el.countDelayed.textContent = delayed;
 
+  el.dashboardEmpty.hidden = deliveries.length > 0;
   el.dashboardList.innerHTML = "";
-  for (const delivery of deliveries) {
+
+  // Exception-first ordering: failed and delayed deliveries surface above normal traffic.
+  const ordered = [...deliveries].sort((a, b) => exceptionRank(b) - exceptionRank(a));
+  for (const delivery of ordered) {
     el.dashboardList.appendChild(buildDeliveryCard(delivery, { showOpenHistory: true }));
   }
 }
 
-function buildDeliveryCard(delivery, { showOpenHistory = false } = {}) {
+function exceptionRank(delivery) {
+  if (delivery.status === "failed") return 2;
+  if (delivery.isDelayed) return 1;
+  return 0;
+}
+
+function buildDeliveryCard(delivery, { showOpenHistory = false, showOutcome = false } = {}) {
   const card = document.createElement("div");
   card.className = "delivery-card";
   card.dataset.testid = `delivery-card-${delivery.id}`;
-  if (delivery.status === "failed") {
-    card.classList.add("emphasized");
-  }
+  if (delivery.status === "failed") card.classList.add("emphasized");
+  if (delivery.isDelayed) card.classList.add("delayed");
 
   const title = document.createElement("div");
   title.className = "delivery-card-title";
@@ -282,68 +357,203 @@ function buildDeliveryCard(delivery, { showOpenHistory = false } = {}) {
   meta.className = "delivery-card-meta";
   meta.textContent = `${delivery.address} · Driver: ${driverName(delivery.driverId)}`;
 
+  // Required operational field: when this delivery last actually changed state.
+  const lastChange = document.createElement("div");
+  lastChange.className = "delivery-card-meta";
+  lastChange.dataset.testid = `delivery-card-last-change-${delivery.id}`;
+  lastChange.textContent = `Last update: ${formatTimestamp(delivery.lastStatusChangeAt)}`;
+
+  const chipRow = document.createElement("div");
+  chipRow.className = "delivery-card-chip-row";
+
   const chip = document.createElement("span");
   chip.className = "status-chip";
   chip.dataset.status = delivery.status;
   chip.textContent = STATUS_LABELS[delivery.status] || delivery.status;
+  chipRow.appendChild(chip);
 
-  card.appendChild(title);
-  card.appendChild(meta);
-  card.appendChild(chip);
+  if (delivery.isDelayed) {
+    const delayedChip = document.createElement("span");
+    delayedChip.className = "status-chip delayed-chip";
+    delayedChip.dataset.testid = `delayed-chip-${delivery.id}`;
+    delayedChip.textContent = "Delayed";
+    chipRow.appendChild(delayedChip);
+  }
+  if (delivery.isRedeliveryTarget) {
+    const redeliveryChip = document.createElement("span");
+    redeliveryChip.className = "status-chip redelivery-chip";
+    redeliveryChip.textContent = "Re-delivery";
+    chipRow.appendChild(redeliveryChip);
+  }
+
+  card.append(title, meta, lastChange, chipRow);
+
+  if (showOutcome) {
+    const outcome = document.createElement("div");
+    outcome.className = "delivery-card-meta";
+    outcome.dataset.testid = `delivery-card-outcome-${delivery.id}`;
+    const reason = delivery.failureReason ? ` · Reason: ${delivery.failureReason.replace(/_/g, " ")}` : "";
+    const label = delivery.status === "delivered" ? "Completed" : "Failed";
+    outcome.textContent = `${label}: ${formatTimestamp(delivery.outcomeAt)}${reason}`;
+    card.appendChild(outcome);
+  }
 
   if (showOpenHistory) {
-    card.addEventListener("click", () => openHistoryModal(delivery));
+    const historyButton = document.createElement("button");
+    historyButton.type = "button";
+    historyButton.className = "card-action-button secondary-button";
+    historyButton.dataset.testid = `open-history-button-${delivery.id}`;
+    historyButton.textContent = "View status history";
+    historyButton.addEventListener("click", () => openHistoryModal(delivery));
+    card.appendChild(historyButton);
   }
 
   return card;
 }
 
-// SSE subscription for the dashboard (channel=all): reload on any domain event.
-function subscribeToAllEvents() {
-  if (eventSource) eventSource.close();
-  eventSource = new EventSource(`${API_BASE}/events?channel=all`);
-  eventSource.onmessage = () => {
-    if (!el.tabs.dashboard.hidden) loadDashboard();
-    if (!el.tabs.assignment.hidden) loadUnassigned();
-  };
+/**
+ * Authenticated admin-wide stream. EventSource cannot send an Authorization header, so a
+ * short-lived one-use ticket is minted from the admin JWT; the server derives the
+ * admin-wide channel from that token, so this stream is no longer publicly subscribable.
+ */
+async function subscribeToAllEvents() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+
+  try {
+    const res = await apiFetch("/events/ticket", { method: "POST" });
+    if (!res.ok) return;
+    const { ticket } = await res.json();
+
+    const source = new EventSource(`${API_BASE}/events?ticket=${encodeURIComponent(ticket)}`);
+    eventSource = source;
+    let hasConnected = false;
+
+    source.onopen = () => {
+      setConnectionState("live");
+      // Re-sync after a reconnect since events during the gap were missed.
+      if (hasConnected) void refreshActiveTab({ silent: true });
+      hasConnected = true;
+    };
+    source.onmessage = () => {
+      setConnectionState("live");
+      void refreshActiveTab({ silent: true });
+    };
+    source.onerror = () => {
+      setConnectionState(source.readyState === EventSource.CLOSED ? "offline" : "reconnecting");
+      if (source.readyState === EventSource.CLOSED && getToken()) {
+        setTimeout(() => {
+          if (getToken() && eventSource === source) void subscribeToAllEvents();
+        }, 3000);
+      }
+    };
+  } catch {
+    setConnectionState("offline");
+  }
+}
+
+async function refreshActiveTab({ silent = false } = {}) {
+  if (!el.tabs.dashboard.hidden) await loadDashboard({ silent });
+  if (!el.tabs.assignment.hidden) await loadUnassigned();
+  if (!el.tabs.history.hidden) await loadHistory({ silent });
 }
 
 // --- ADM-3: Assignment ---
 
 async function loadUnassigned() {
-  const res = await apiFetch("/admin/deliveries/unassigned");
-  const deliveries = await res.json();
-  renderUnassigned(deliveries);
+  try {
+    const [unassignedRes, allRes] = await Promise.all([
+      apiFetch("/admin/deliveries/unassigned"),
+      apiFetch("/admin/deliveries"),
+    ]);
+    if (!unassignedRes.ok || !allRes.ok) return;
+
+    const needsAssignment = await unassignedRes.json();
+    const all = await allRes.json();
+    const needsAssignmentIds = new Set(needsAssignment.map((d) => d.id));
+
+    // ADM-3 requires reassignment of any delivery, not just unassigned/failed ones.
+    const reassignable = all.filter(
+      (d) => !needsAssignmentIds.has(d.id) && d.driverId && ACTIVE_STATUSES.includes(d.status)
+    );
+
+    renderAssignmentList(el.unassignedList, el.unassignedEmptyMessage, needsAssignment);
+    renderAssignmentList(el.reassignList, el.reassignEmptyMessage, reassignable);
+  } catch {
+    // Session/network handled by apiFetch; connection pill reflects stream state.
+  }
 }
 
-function renderUnassigned(deliveries) {
-  el.unassignedList.innerHTML = "";
-  el.unassignedEmptyMessage.hidden = deliveries.length > 0;
+function renderAssignmentList(listEl, emptyEl, deliveries) {
+  listEl.innerHTML = "";
+  emptyEl.hidden = deliveries.length > 0;
 
   for (const delivery of deliveries) {
     const card = buildDeliveryCard(delivery);
     const assignButton = document.createElement("button");
+    assignButton.type = "button";
     assignButton.className = "assign-button";
     assignButton.dataset.testid = `assign-button-${delivery.id}`;
     assignButton.textContent = delivery.driverId ? "Reassign" : "Assign";
-    assignButton.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openAssignModal(delivery);
-    });
+    assignButton.addEventListener("click", () => openAssignModal(delivery));
     card.appendChild(assignButton);
-    el.unassignedList.appendChild(card);
+    listEl.appendChild(card);
   }
 }
 
 function openAssignModal(delivery) {
   assignTargetId = delivery.id;
-  el.assignModalDeliveryInfo.textContent = `${delivery.trackingNumber} — ${delivery.productName}`;
+  el.assignModalDeliveryInfo.textContent = `${delivery.trackingNumber} — ${delivery.productName} (current driver: ${driverName(
+    delivery.driverId
+  )})`;
   el.assignFeedback.hidden = true;
-  el.assignModal.hidden = false;
+  openModal(el.assignModal, el.assignDriverSelect);
 }
 
+/** Accessible dialog helpers: focus in, trap while open, restore on close, Escape to dismiss. */
+function openModal(modal, initialFocusEl) {
+  lastFocusedBeforeModal = document.activeElement;
+  modal.hidden = false;
+  (initialFocusEl || modal.querySelector("button, select, input, textarea"))?.focus();
+}
+
+function closeModal(modal, form) {
+  modal.hidden = true;
+  form?.reset();
+  if (lastFocusedBeforeModal instanceof HTMLElement) lastFocusedBeforeModal.focus();
+}
+
+document.addEventListener("keydown", (event) => {
+  const modal = [el.assignModal, el.historyModal, el.newDeliveryModal, el.editModal].find((m) => m && !m.hidden);
+  if (!modal) return;
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeModal(modal, modal.querySelector("form"));
+    return;
+  }
+  if (event.key !== "Tab") return;
+
+  const focusables = [...modal.querySelectorAll("button, select, input, textarea, [href]")].filter(
+    (node) => !node.disabled && node.offsetParent !== null
+  );
+  if (focusables.length === 0) return;
+
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+
 el.assignCancelButton.addEventListener("click", () => {
-  el.assignModal.hidden = true;
+  closeModal(el.assignModal);
 });
 
 el.assignConfirmButton.addEventListener("click", async () => {
@@ -368,8 +578,9 @@ el.assignConfirmButton.addEventListener("click", async () => {
       return;
     }
 
-    el.assignModal.hidden = true;
-    await loadUnassigned();
+    closeModal(el.assignModal);
+    announce("Delivery assigned successfully.");
+    await Promise.all([loadUnassigned(), loadDashboard({ silent: true })]);
   } catch (err) {
     el.assignFeedback.textContent = err.message || "Network error.";
     el.assignFeedback.hidden = false;
@@ -380,21 +591,40 @@ el.assignConfirmButton.addEventListener("click", async () => {
 
 async function openHistoryModal(delivery) {
   el.historyModalTitle.textContent = `${delivery.trackingNumber} — ${delivery.productName}`;
-  const res = await apiFetch(`/admin/deliveries/${delivery.id}/history`);
-  const history = await res.json();
-
   el.historyTimeline.innerHTML = "";
-  for (const entry of history) {
+  openModal(el.historyModal, el.historyModalCloseButton);
+
+  try {
+    const res = await apiFetch(`/admin/deliveries/${delivery.id}/history`);
+    if (!res.ok) {
+      const li = document.createElement("li");
+      li.textContent = "Could not load status history.";
+      el.historyTimeline.appendChild(li);
+      return;
+    }
+    const history = await res.json();
+
+    if (history.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "No status history recorded yet.";
+      el.historyTimeline.appendChild(li);
+      return;
+    }
+
+    for (const entry of history) {
+      const li = document.createElement("li");
+      li.textContent = `${STATUS_LABELS[entry.status] || entry.status} — ${formatTimestamp(entry.changedAt)} (${entry.actor})`;
+      el.historyTimeline.appendChild(li);
+    }
+  } catch {
     const li = document.createElement("li");
-    li.textContent = `${STATUS_LABELS[entry.status] || entry.status} — ${new Date(entry.changedAt).toLocaleString()} (${entry.actor})`;
+    li.textContent = "Could not load status history.";
     el.historyTimeline.appendChild(li);
   }
-
-  el.historyModal.hidden = false;
 }
 
 el.historyModalCloseButton.addEventListener("click", () => {
-  el.historyModal.hidden = true;
+  closeModal(el.historyModal);
 });
 
 // --- ADM-4: Master data ---
@@ -416,18 +646,37 @@ function renderDriverList() {
 
     li.appendChild(label);
 
+    const actions = document.createElement("div");
+    actions.className = "masterdata-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.className = "secondary-button";
+    editButton.dataset.testid = `edit-driver-button-${driver.id}`;
+    editButton.addEventListener("click", () => openEditModal("driver", driver));
+    actions.appendChild(editButton);
+
     if (driver.active) {
       const deactivateButton = document.createElement("button");
+      deactivateButton.type = "button";
       deactivateButton.textContent = "Deactivate";
       deactivateButton.className = "secondary-button";
       deactivateButton.dataset.testid = `deactivate-driver-button-${driver.id}`;
       deactivateButton.addEventListener("click", async () => {
-        await apiFetch(`/admin/drivers/${driver.id}/deactivate`, { method: "POST" });
-        await loadMasterData();
+        const res = await apiFetch(`/admin/drivers/${driver.id}/deactivate`, { method: "POST" });
+        if (res.ok) {
+          showFeedback(el.driverFeedback, `${driver.name} deactivated.`, true);
+          await loadMasterData();
+        } else {
+          const body = await res.json().catch(() => ({}));
+          showFeedback(el.driverFeedback, body.error || "Could not deactivate driver.", false);
+        }
       });
-      li.appendChild(deactivateButton);
+      actions.appendChild(deactivateButton);
     }
 
+    li.appendChild(actions);
     el.driverList.appendChild(li);
   }
 }
@@ -440,18 +689,36 @@ function renderCampList() {
     label.textContent = `${camp.name} (${camp.assignedArea})`;
     li.appendChild(label);
 
+    const actions = document.createElement("div");
+    actions.className = "masterdata-actions";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit";
+    editButton.className = "secondary-button";
+    editButton.dataset.testid = `edit-camp-button-${camp.id}`;
+    editButton.addEventListener("click", () => openEditModal("camp", camp));
+    actions.appendChild(editButton);
+
     const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
     deleteButton.textContent = "Delete";
     deleteButton.className = "secondary-button";
     deleteButton.dataset.testid = `delete-camp-button-${camp.id}`;
     deleteButton.addEventListener("click", async () => {
       const res = await apiFetch(`/admin/camps/${camp.id}`, { method: "DELETE" });
       if (res.ok || res.status === 204) {
+        showFeedback(el.campFeedback, `${camp.name} deleted.`, true);
         await loadMasterData();
+        return;
       }
+      // A referenced camp now returns a clear 409 instead of a generic server error.
+      const body = await res.json().catch(() => ({}));
+      showFeedback(el.campFeedback, body.error || "Could not delete camp.", false);
     });
-    li.appendChild(deleteButton);
+    actions.appendChild(deleteButton);
 
+    li.appendChild(actions);
     el.campList.appendChild(li);
   }
 }
@@ -510,6 +777,63 @@ el.campForm.addEventListener("submit", async (e) => {
   }
 });
 
+// --- ADM-4: Edit driver / camp ---
+
+function openEditModal(type, record) {
+  editTarget = { type, id: record.id };
+  el.editFeedback.hidden = true;
+  el.editFieldDriver.hidden = type !== "driver";
+  el.editFieldCamp.hidden = type !== "camp";
+
+  if (type === "driver") {
+    el.editModalTitle.textContent = `Edit driver ${record.employeeId}`;
+    el.editDriverName.value = record.name;
+    el.editDriverArea.value = record.assignedArea;
+    el.editDriverContact.value = record.contact;
+    openModal(el.editModal, el.editDriverName);
+  } else {
+    el.editModalTitle.textContent = `Edit camp ${record.name}`;
+    el.editCampName.value = record.name;
+    el.editCampArea.value = record.assignedArea;
+    openModal(el.editModal, el.editCampName);
+  }
+}
+
+el.editCancelButton.addEventListener("click", () => {
+  editTarget = null;
+  closeModal(el.editModal);
+});
+
+el.editForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!editTarget) return;
+
+  const isDriver = editTarget.type === "driver";
+  const path = isDriver ? `/admin/drivers/${editTarget.id}` : `/admin/camps/${editTarget.id}`;
+  const body = isDriver
+    ? {
+        name: el.editDriverName.value.trim(),
+        assignedArea: el.editDriverArea.value.trim(),
+        contact: el.editDriverContact.value.trim(),
+      }
+    : { name: el.editCampName.value.trim(), assignedArea: el.editCampArea.value.trim() };
+
+  try {
+    const res = await apiFetch(path, { method: "PATCH", body: JSON.stringify(body) });
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      showFeedback(el.editFeedback, errorBody.error || "Could not save changes.", false);
+      return;
+    }
+    editTarget = null;
+    closeModal(el.editModal);
+    announce("Record updated.");
+    await loadMasterData();
+  } catch (err) {
+    showFeedback(el.editFeedback, err?.message || "Network error.", false);
+  }
+});
+
 function showFeedback(feedbackEl, message, success) {
   feedbackEl.textContent = message;
   feedbackEl.style.color = success ? "#16a34a" : "#dc2626";
@@ -518,44 +842,40 @@ function showFeedback(feedbackEl, message, success) {
 
 // --- ADM-5: History ---
 
-async function loadHistory() {
-  const params = new URLSearchParams();
+async function loadHistory({ silent = false } = {}) {
+  // The backend now filters and orders completed/failed deliveries by their terminal outcome
+  // time (history=true) with inclusive day boundaries, so no client-side merging is needed.
+  const params = new URLSearchParams({ history: "true" });
   if (el.historyDateFrom.value) params.set("dateFrom", el.historyDateFrom.value);
   if (el.historyDateTo.value) params.set("dateTo", el.historyDateTo.value);
   if (el.historyDriverFilter.value) params.set("driverId", el.historyDriverFilter.value);
+  if (el.historyStatusFilter.value) params.set("status", el.historyStatusFilter.value);
 
-  const statusFilter = el.historyStatusFilter.value;
-  // History view only shows completed/failed deliveries (ADM-5); if no specific status
-  // chosen, fetch both by making two calls and merging, since the API filters by one status.
-  let deliveries;
-  if (statusFilter) {
-    params.set("status", statusFilter);
+  if (!silent) el.historyLoading.hidden = false;
+  el.historyError.hidden = true;
+  try {
     const res = await apiFetch(`/admin/deliveries?${params.toString()}`);
-    deliveries = await res.json();
-  } else {
-    const deliveredParams = new URLSearchParams(params);
-    deliveredParams.set("status", "delivered");
-    const failedParams = new URLSearchParams(params);
-    failedParams.set("status", "failed");
-
-    const [deliveredRes, failedRes] = await Promise.all([
-      apiFetch(`/admin/deliveries?${deliveredParams.toString()}`),
-      apiFetch(`/admin/deliveries?${failedParams.toString()}`),
-    ]);
-    const delivered = await deliveredRes.json();
-    const failed = await failedRes.json();
-    deliveries = [...delivered, ...failed].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (!res.ok) {
+      el.historyError.textContent = "Could not load delivery history. Please retry.";
+      el.historyError.hidden = false;
+      return;
+    }
+    renderHistory(await res.json());
+  } catch (err) {
+    el.historyError.textContent = err?.message || "Could not load delivery history.";
+    el.historyError.hidden = false;
+  } finally {
+    el.historyLoading.hidden = true;
   }
-
-  renderHistory(deliveries);
 }
 
-el.historyFilterButton.addEventListener("click", loadHistory);
+el.historyFilterButton.addEventListener("click", () => void loadHistory());
 
 function renderHistory(deliveries) {
   el.historyList.innerHTML = "";
+  el.historyEmpty.hidden = deliveries.length > 0;
   for (const delivery of deliveries) {
-    el.historyList.appendChild(buildDeliveryCard(delivery, { showOpenHistory: true }));
+    el.historyList.appendChild(buildDeliveryCard(delivery, { showOpenHistory: true, showOutcome: true }));
   }
 }
 
@@ -563,12 +883,11 @@ function renderHistory(deliveries) {
 
 el.newDeliveryButton.addEventListener("click", () => {
   el.newDeliveryFeedback.hidden = true;
-  el.newDeliveryModal.hidden = false;
+  openModal(el.newDeliveryModal, el.newDeliveryProduct);
 });
 
 el.newDeliveryCancelButton.addEventListener("click", () => {
-  el.newDeliveryModal.hidden = true;
-  el.newDeliveryForm.reset();
+  closeModal(el.newDeliveryModal, el.newDeliveryForm);
 });
 
 el.newDeliveryForm.addEventListener("submit", async (e) => {
@@ -591,8 +910,8 @@ el.newDeliveryForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    el.newDeliveryModal.hidden = true;
-    el.newDeliveryForm.reset();
+    closeModal(el.newDeliveryModal, el.newDeliveryForm);
+    announce("Delivery created.");
     await loadDashboard();
   } catch (err) {
     showFeedback(el.newDeliveryFeedback, err.message || "Network error.", false);
@@ -604,7 +923,7 @@ el.newDeliveryForm.addEventListener("submit", async (e) => {
 async function initApp() {
   await loadReferenceData();
   await loadDashboard();
-  subscribeToAllEvents();
+  await subscribeToAllEvents();
 }
 
 (async function init() {
