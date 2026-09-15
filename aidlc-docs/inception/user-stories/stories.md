@@ -273,3 +273,56 @@
 | Deferred map (3.5) | DEFER-1 |
 
 All functional requirements from `requirements.md` are covered by exactly one story, per the approved plan (one story per FR).
+
+---
+
+## Benchmark-Driven Enhancement Stories
+
+### BEST-1 — Reliable and Accessible Live Tracking
+**As a** recipient, **I want** ETA, countdown, live map, route progress, and connection status to stay synchronized and recover after disconnects **so that** I can trust the tracking experience.
+
+**Acceptance Criteria**:
+- [ ] Detail and map show one shared countdown immediately from the delivery lookup response
+- [ ] Countdown transitions to `Arriving soon` and then `ETA passed — driver is still on the way`
+- [ ] Connected/reconnecting state is visible and announced
+- [ ] Reconnect refetches delivery and location snapshots
+- [ ] Map and status information remain understandable with reduced motion or without the map
+
+### BEST-2 — Integrity of Delivery Instructions and Recent History
+**As a** recipient, **I want** my custom instruction and recent delivery statuses to remain accurate **so that** the system never silently substitutes stale information.
+
+**Acceptance Criteria**:
+- [ ] Presets populate the textarea; textarea is the submitted source of truth
+- [ ] Locked deliveries hide edit controls and show the saved note read-only
+- [ ] Recent lookup statuses refresh on page load
+- [ ] Recent rows are keyboard operable and indicate last-known state on refresh failure
+
+### BEST-3 — Authorized, Realtime Driver Work
+**As a** driver, **I want** only my current assignments to appear and update live **so that** I can work safely without stale or unauthorized delivery data.
+
+**Acceptance Criteria**:
+- [ ] Reading/mutating another driver's delivery is denied
+- [ ] Driver realtime channel is authenticated and bound to the logged-in driver
+- [ ] Assignment/status events refresh the list and detail snapshot
+- [ ] Delivery cards show order, note summary, address, and status
+- [ ] JWT expiry schedules logout; deactivated drivers lose protected access
+
+### BEST-4 — Exception-First Operations Control
+**As an** operations user, **I want** accurate timestamps, delay signals, complete reassignment, and correct history **so that** I can identify and resolve delivery exceptions quickly.
+
+**Acceptance Criteria**:
+- [ ] Dashboard shows last status-change time and accurate delayed count
+- [ ] Any eligible delivery can be reassigned with confirmation and feedback
+- [ ] Driver/camp records can be edited; referenced camps cannot be deleted silently
+- [ ] History uses terminal outcome time for ordering/filtering and displays failure reason
+- [ ] Admin realtime stream is authenticated and reconnects with snapshot recovery
+
+### BEST-5 — Safe and Recoverable Realtime Platform
+**As the** system owner, **I want** realtime streams and re-delivery attempts to be authorized and recoverable **so that** live views remain trustworthy.
+
+**Acceptance Criteria**:
+- [ ] Privileged SSE subscriptions require short-lived authenticated tickets
+- [ ] SSE sends retry metadata and heartbeat comments
+- [ ] Reassigning a failed delivery creates a fresh attempt timestamp/ETA and restarts location simulation
+- [ ] Server validates status/outcome enums, proof URLs, and input lengths
+- [ ] Automated tests cover ownership denial, stream-ticket scope, and re-delivery reset

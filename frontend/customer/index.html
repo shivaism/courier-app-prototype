@@ -113,13 +113,31 @@
 
       <!-- CUST-3: Request note -->
       <h2>Delivery Instructions</h2>
-      <form id="note-form" data-testid="request-note-form">
+
+      <!-- Read-only view: shown once the note can no longer be edited (out for delivery or
+           later), so the UI never implies an edit is still possible. -->
+      <div id="note-readonly-view" class="note-readonly-view" data-testid="request-note-readonly-view" hidden>
+        <p id="note-readonly-text" data-testid="request-note-readonly-text"></p>
+        <p id="note-locked-message" class="info-message" data-testid="request-note-locked-message">
+          Delivery is already out — note can no longer be changed.
+        </p>
+      </div>
+
+      <!-- Editable form: shown only while the note can still be changed. -->
+      <form id="note-form" class="note-form" data-testid="request-note-form" hidden>
         <label for="note-select">Quick note</label>
         <select id="note-select" data-testid="request-note-select">
           <option value="">— Select a preset —</option>
           <option value="Leave at the door and ring the bell">Leave at the door and ring the bell</option>
+          <option value="Leave at the door, no need to ring the bell">Leave at the door, no need to ring the bell</option>
           <option value="Leave with security desk">Leave with security desk</option>
+          <option value="Leave with building concierge">Leave with building concierge</option>
           <option value="Call if absent">Call if absent</option>
+          <option value="Text me when you arrive">Text me when you arrive</option>
+          <option value="Please handle with care">Please handle with care</option>
+          <option value="Beware of dog">Beware of dog</option>
+          <option value="Leave in the parcel locker">Leave in the parcel locker</option>
+          <option value="Contactless delivery preferred">Contactless delivery preferred</option>
         </select>
         <label for="note-textarea">Or write your own</label>
         <textarea
@@ -129,9 +147,6 @@
           placeholder="e.g. Please leave with the front desk"
         ></textarea>
         <button type="submit" data-testid="request-note-save-button">Save Note</button>
-        <p id="note-locked-message" class="info-message" data-testid="request-note-locked-message" hidden>
-          Delivery is already out — note can no longer be changed.
-        </p>
         <p id="note-feedback" class="feedback-message" data-testid="request-note-feedback" hidden></p>
       </form>
     </section>

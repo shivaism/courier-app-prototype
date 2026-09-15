@@ -310,3 +310,34 @@ A delivery tracking platform that provides recipients (customers) with a transpa
 - **Line-haul**: The large-scale transport stage that moves goods between fulfillment centers
 - **Last mile**: The delivery leg from the camp to the final recipient
 - **Re-delivery target**: A delivery that must be delivered again due to a delivery failure
+
+## B. Benchmark-Driven Enhancements (Required, Current)
+
+The following requirements incorporate the approved post-MVP iterations and best-in-class delivery-tracking patterns. They are required within the existing workshop constraints; they do not authorize real GPS collection, paid map services, notifications, production-scale infrastructure, or external commerce integrations.
+
+### Customer
+- Show ETA timestamp and a persistent countdown on the detail page and live map, including `Arriving soon` and `ETA passed` states.
+- Show the inline live map automatically for out-for-delivery deliveries. Vehicle movement follows a road-snapped mock route when routing is available and a deterministic offline fallback otherwise.
+- Show realtime connection state and refresh authoritative snapshots after reconnect.
+- Make the free-text request note canonical. Presets populate it but never override later edits. Hide edit controls entirely after lock and show the saved note read-only.
+- Refresh locally stored recent tracking statuses on return visits.
+- Support keyboard operation, live status announcements, visible focus, responsive reflow, and reduced motion.
+
+### Driver
+- Enforce that a driver can access/mutate only their assigned deliveries.
+- Refresh assignments and statuses through an authenticated realtime channel.
+- Show request-note summary and explicit delivery order in the list.
+- Schedule client logout at JWT expiry and reject deactivated drivers on protected requests.
+- Validate outcome enums, proof URL scheme, and note/memo length.
+
+### Operations
+- Show last status-change time and truthful derived delayed state.
+- Allow reassignment of any eligible delivery, not only unassigned/failed items.
+- Support edit flows for drivers and camps and safe camp deletion conflicts.
+- Filter/order completed and failed history by outcome time and show outcome timestamp/reason.
+- Provide keyboard-accessible tabs/cards/dialogs, loading/error/empty states, responsive layouts, and reduced-motion behavior.
+
+### Realtime Platform
+- Require short-lived authenticated stream tickets for admin-wide and driver-specific SSE channels.
+- Send SSE retry guidance and heartbeats; clients show connected/reconnecting state and recover with snapshot refresh.
+- Reassigning a failed delivery starts a new delivery attempt with fresh out-for-delivery time/ETA and restarts map simulation.

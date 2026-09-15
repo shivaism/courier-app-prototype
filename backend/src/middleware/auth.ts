@@ -31,6 +31,11 @@ export function requireAuth(authService: AuthService, allowedActorTypes: ActorTy
       return;
     }
 
+    if (!authService.isActorActive(payload)) {
+      res.status(401).json({ error: "Account is inactive or no longer available" });
+      return;
+    }
+
     req.actor = payload;
     next();
   };

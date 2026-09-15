@@ -111,3 +111,46 @@ Exact schema/fields will be finalized during Application/Functional Design.
 - **Line-haul**: Large-scale transport between fulfillment centers
 - **Last mile**: Delivery leg from the camp to the final recipient
 - **Re-delivery target**: A delivery that must be re-attempted due to a failure
+
+## 9. Benchmark-Driven Product Requirements (Required)
+
+These requirements supersede conflicting earlier “deferred” or completeness statements. Rationale and official benchmark sources are documented in `benchmark-analysis.md`.
+
+### 9.1 Customer Experience
+
+- **FR-B1 Unified Live Tracking**: When a delivery is out for delivery, show a road-snapped live map, current vehicle position/direction, route progress, ETA timestamp, and one persistent countdown shared by detail and map views.
+- **FR-B2 Time-State Clarity**: Countdown states are `Arriving in …`, `Arriving soon`, and `ETA passed — driver is still on the way`; never leave the UI at an unexplained `0s`.
+- **FR-B3 Live Connection Recovery**: Show connected/reconnecting status. On reconnect, refetch delivery and location snapshots before processing later events.
+- **FR-B4 Instruction Integrity**: The custom textarea is canonical. Selecting a preset copies into it; later custom edits are never overwritten by stale select state. Once locked, hide all editing controls and show only the saved note or an explicit no-note message.
+- **FR-B5 Fresh Recent Lookups**: Refresh recent lookup statuses when the customer page loads. Preserve entries if refresh fails and identify status as last known.
+- **FR-B6 Customer Accessibility**: Recent lookup rows are keyboard operable. Dynamic status/connection/countdown feedback uses appropriate live-region semantics. Focus is visible, layout reflows on narrow screens, and nonessential animation respects reduced-motion preferences.
+
+### 9.2 Driver Experience
+
+- **FR-B7 Assignment Authorization**: Drivers can read and mutate only deliveries assigned to their authenticated driver identity.
+- **FR-B8 Realtime Driver Worklist**: Driver assignments/status changes refresh over an authenticated realtime stream with visible connection state and snapshot recovery.
+- **FR-B9 Actionable Delivery Cards**: Driver cards show delivery order, product, full address, request-note summary, and status. Remaining count is accurate and controls meet minimum touch-target guidance.
+- **FR-B10 Session Integrity**: Client schedules automatic logout from JWT expiry; protected backend requests reject deactivated drivers even if a previously issued token has not expired.
+- **FR-B11 Validated Outcomes**: Receipt methods and failure reasons must be allowed enum values. Proof URLs must be HTTP(S); note and memo inputs have documented length limits.
+
+### 9.3 Operations Experience
+
+- **FR-B12 Accurate Monitoring**: Dashboard cards and delivery rows include last status-change time. Delayed is a truthful derived state, not an alias for failed.
+- **FR-B13 Complete Assignment Management**: Operations can assign or reassign any eligible delivery, including failed/re-delivery targets, with confirmation and visible success/error feedback.
+- **FR-B14 Complete Master Data**: Operations can create/edit/deactivate drivers and create/edit/delete camps. Referenced-camp deletion returns a clear conflict rather than a server error.
+- **FR-B15 Correct Delivery History**: Completed/failed history is ordered and filtered by outcome time, uses inclusive date boundaries, and displays outcome timestamp and failure reason.
+- **FR-B16 Operations Accessibility**: Tabs, delivery cards, dialogs, forms, status messages, and exception emphasis are keyboard/screen-reader accessible; responsive and reduced-motion rules apply.
+
+### 9.4 Platform and Realtime
+
+- **FR-B17 Privileged SSE Authorization**: Admin-wide and driver-specific SSE channels require a short-lived stream ticket minted from a valid JWT. Customer tracking streams remain scoped by tracking number.
+- **FR-B18 SSE Health and Recovery**: Streams send retry guidance and periodic heartbeat comments. Clients expose connection state and refetch current snapshots when reconnected.
+- **FR-B19 Re-delivery Attempt Reset**: Reassigning a failed delivery creates a fresh out-for-delivery attempt timestamp and ETA, clears stale failure outcome fields as appropriate, records history, and restarts live-map simulation.
+- **FR-B20 Realtime Event Safety**: Privileged streams expose only data appropriate to the authenticated actor; driver stream identity is bound to the ticket and cannot be selected arbitrarily.
+
+### 9.5 Non-Functional UX Requirements
+
+- **NFR-B1 Accessibility Target**: Aim for WCAG 2.2 AA behavior within workshop scope: visible focus, status announcements, keyboard operation, responsive reflow, reduced motion, and minimum target sizes.
+- **NFR-B2 Realtime Perception**: State changes remain visible within 2 seconds on localhost, and connection loss is explicitly communicated.
+- **NFR-B3 Trust**: Operational delivery content is never obscured by sponsored content. Sponsored content remains clearly labeled and separate from driver identity.
+- **NFR-B4 External-Service Disclosure**: Documentation identifies CARTO/OSM tiles, Leaflet CDN, OSRM route requests, and third-party proof-image URL behavior; mock coordinates never represent real GPS collection.

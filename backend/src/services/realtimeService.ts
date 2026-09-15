@@ -15,6 +15,7 @@ interface Connection {
   id: number;
   res: Response;
   channel: SseChannel;
+  heartbeat: ReturnType<typeof setInterval>;
 }
 
 let nextConnectionId = 1;

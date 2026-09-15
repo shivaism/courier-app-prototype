@@ -147,6 +147,11 @@ button:hover {
   margin: 0;
 }
 
+.eta-countdown-detail {
+  font-weight: 700;
+  color: #1a73e8;
+}
+
 .timeline {
   list-style: none;
   padding: 0;
@@ -366,22 +371,34 @@ button:hover {
   white-space: nowrap;
 }
 
-/* Vehicle marker — sleek sports car, glides between ticks and snaps heading at corners.
-   Leaflet positions the OUTER icon wrapper via an inline transform: translate3d(...);
-   we animate that transform here so successive SSE position ticks glide rather than jump.
-   The INNER .vehicle-marker div carries a separate rotate() transform for heading, which
-   Leaflet does not touch, so its own transition can animate independently. */
+/* Vehicle marker — custom SVG car icon (not a font emoji, whose "facing" direction varies
+   unpredictably across fonts/OSes and can end up looking reversed when rotated).
+   The icon SVG is drawn pointing due north/up by default. Leaflet positions the OUTER
+   `.leaflet-marker-icon` element via an inline transform: translate3d(...); we add a CSS
+   transition on that same property (scoped to our custom class, so no other Leaflet
+   markers are affected) so that successive SSE position ticks glide smoothly instead of
+   jumping. The INNER `.vehicle-inner` div carries a separate rotate() transform for heading
+   that we update directly via JS on each tick (not via setIcon, which would destroy and
+   recreate the element and kill the glide transition — see app.js). */
 .vehicle-icon-wrapper {
-  transition: transform 1.05s linear;
+  transition: transform 1.1s linear;
 }
 
-.vehicle-marker {
-  font-size: 30px;
-  line-height: 1;
-  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4));
-  transition: transform 0.6s ease-out;
+.vehicle-inner {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.5s ease-out;
   transform-origin: center center;
   will-change: transform;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+
+.vehicle-inner svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* Clean, Google-Maps-like popup styling (used on both the inline and full-screen maps) */
@@ -406,6 +423,23 @@ button:hover {
   max-width: 100%;
   border-radius: 6px;
   margin-top: 0.5rem;
+}
+
+.note-readonly-view {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.note-readonly-view p:first-child {
+  margin: 0 0 0.5rem;
+  font-weight: 500;
+}
+
+.note-readonly-view .info-message {
+  margin: 0;
 }
 
 #note-form label {

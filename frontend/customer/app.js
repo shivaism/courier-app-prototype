@@ -35,8 +35,9 @@ const el = {
   noteForm: document.getElementById("note-form"),
   noteSelect: document.getElementById("note-select"),
   noteTextarea: document.getElementById("note-textarea"),
-  noteLockedMessage: document.getElementById("note-locked-message"),
   noteFeedback: document.getElementById("note-feedback"),
+  noteReadonlyView: document.getElementById("note-readonly-view"),
+  noteReadonlyText: document.getElementById("note-readonly-text"),
   historyList: document.getElementById("history-list"),
   historyEmptyMessage: document.getElementById("history-empty-message"),
 };
@@ -52,6 +53,7 @@ let etaCountdownTimer = null;
 let etaTargetMs = null;
 let hasCenteredOnVehicle = false;
 let isFollowingVehicle = false;
+let lastHeading = 0; // accumulated rotation in degrees, not clamped to 0-360 (see shortestRotation)
 
 const mapEl = {
   section: document.getElementById("live-map-section"),
@@ -174,6 +176,14 @@ function renderDelivery(delivery) {
   el.address.textContent = delivery.address;
   el.eta.textContent = delivery.eta ? new Date(delivery.eta).toLocaleString() : "Not yet available";
 
+  // Persistent countdown (detail page + live map share one timer/target) — seeded
+  // immediately from the lookup response so it's visible before the map/route even loads.
+  if (delivery.eta && delivery.status !== "delivered" && delivery.status !== "failed") {
+    setEtaCountdownTarget(new Date(delivery.eta).getTime());
+  } else {
+    hideEtaCountdown();
+  }
+
   if (delivery.driverLastName) {
     el.driverNameLabel.hidden = false;
     el.driverName.hidden = false;
@@ -202,17 +212,27 @@ function renderDelivery(delivery) {
     el.completionPanel.hidden = true;
   }
 
-  // CUST-3: note editability
-  el.noteTextarea.value = delivery.requestNote || "";
-  el.noteSelect.value = "";
+  // CUST-3: note editability — show ONLY the editable form while the note can still be
+  // changed, and ONLY the read-only view once it's locked (out for delivery or later).
+  // Previously the form was always shown but disabled, which could look like a UI bug
+  // (dropdown/textarea visible but unresponsive) rather than a clear "this is now locked"
+  // state — showing/hiding the two views entirely avoids that false impression.
   const editable = delivery.requestNoteEditable;
-  el.noteTextarea.disabled = !editable;
-  el.noteSelect.disabled = !editable;
-  el.noteForm.querySelector("button[type=submit]").disabled = !editable;
-  el.noteLockedMessage.hidden = editable;
-  el.noteFeedback.hidden = true;
 
-  el.noteForm.dataset.trackingNumber = delivery.trackingNumber;
+  if (editable) {
+    el.noteForm.hidden = false;
+    el.noteReadonlyView.hidden = true;
+    el.noteTextarea.value = delivery.requestNote || "";
+    el.noteSelect.value = "";
+    el.noteFeedback.hidden = true;
+    el.noteForm.dataset.trackingNumber = delivery.trackingNumber;
+  } else {
+    el.noteForm.hidden = true;
+    el.noteReadonlyView.hidden = false;
+    el.noteReadonlyText.textContent = delivery.requestNote
+      ? delivery.requestNote
+      : "No delivery instructions were left for this order.";
+  }
 }
 
 function renderTimeline(delivery) {
@@ -299,13 +319,56 @@ function ensureMap() {
   return map;
 }
 
-function vehicleIcon(headingDegrees) {
+// Custom SVG car icon, drawn pointing due "up" (north / 0 degrees) by default. Using our
+// own SVG (rather than a font emoji like 🏎️) guarantees we know its exact default facing
+// direction, so rotating it to match the direction of travel never ends up looking reversed.
+const CAR_SVG = `
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <rect x="7" y="2" width="10" height="16" rx="3" fill="#e11d48" stroke="#7f1d1d" stroke-width="0.6"/>
+    <rect x="8.2" y="4.2" width="7.6" height="5" rx="1.4" fill="#bfe3ff" opacity="0.9"/>
+    <rect x="6" y="14.5" width="12" height="2.6" rx="1" fill="#111827"/>
+    <circle cx="8.5" cy="17.5" r="1.6" fill="#111827"/>
+    <circle cx="15.5" cy="17.5" r="1.6" fill="#111827"/>
+    <circle cx="8.5" cy="4" r="1.4" fill="#111827"/>
+    <circle cx="15.5" cy="4" r="1.4" fill="#111827"/>
+    <polygon points="12,0 9.5,3 14.5,3" fill="#e11d48"/>
+  </g>
+</svg>`;
+
+function buildVehicleIcon() {
   return L.divIcon({
     className: "vehicle-icon-wrapper",
-    html: `<div class="vehicle-marker" style="transform: rotate(${headingDegrees}deg);">🏎️</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    html: `<div class="vehicle-inner">${CAR_SVG}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   });
+}
+
+/**
+ * Returns a new rotation value, expressed as `previousAccumulated + delta`, that takes the
+ * SHORTEST angular path from the previous heading to the new target heading (e.g., turning
+ * from 350deg to 10deg should rotate +20deg forward, not -340deg backward). Without this,
+ * a CSS transition across a 0/360-degree wraparound would spin the car almost all the way
+ * around, which visually reads as the car "reversing" direction for a moment.
+ */
+function shortestRotation(previousAccumulated, targetHeading) {
+  const normalizedPrevious = ((previousAccumulated % 360) + 360) % 360;
+  let delta = ((targetHeading - normalizedPrevious + 540) % 360) - 180;
+  return previousAccumulated + delta;
+}
+
+// Rotates the already-mounted marker's inner element in place. Deliberately NOT using
+// Leaflet's marker.setIcon() here — that destroys and recreates the marker's DOM element
+// on every call, which would reset (and visually break) the CSS position/rotation
+// transitions that make the car glide and turn smoothly instead of snapping/jumping.
+function setVehicleHeading(headingDegrees) {
+  if (!vehicleMarker) return;
+  const iconEl = vehicleMarker.getElement();
+  const innerEl = iconEl?.querySelector(".vehicle-inner");
+  if (innerEl) {
+    innerEl.style.transform = `rotate(${headingDegrees}deg)`;
+  }
 }
 
 function renderRoute(snapshot) {
@@ -352,19 +415,24 @@ function renderRoute(snapshot) {
   }
 
   if (!vehicleMarker) {
-    vehicleMarker = L.marker(vehicleLatLng, { icon: vehicleIcon(snapshot.heading) })
+    vehicleMarker = L.marker(vehicleLatLng, { icon: buildVehicleIcon() })
       .addTo(map)
       .bindPopup("Your delivery is on the way")
       .on("click", () => {
         isFollowingVehicle = true;
         map.panTo(vehicleMarker.getLatLng(), { animate: true });
       });
+    // Set initial heading once the marker's DOM element exists.
+    setTimeout(() => setVehicleHeading(snapshot.heading), 0);
+    lastHeading = snapshot.heading;
   } else {
-    // Leaflet's setLatLng jumps instantly; CSS handles the "glide" feel via the marker's
-    // own transition on its wrapping div (see .vehicle-marker transition in styles.css)
-    // applied through Leaflet's internal position updates on each SSE tick.
+    // setLatLng triggers Leaflet's internal transform update on the marker's existing DOM
+    // element; combined with the CSS transition on .vehicle-icon-wrapper (styles.css), this
+    // is what makes the car glide between ticks instead of jumping. We deliberately do NOT
+    // call setIcon() here (see buildVehicleIcon's comment) so the glide isn't reset.
     vehicleMarker.setLatLng(vehicleLatLng);
-    vehicleMarker.setIcon(vehicleIcon(snapshot.heading));
+    setVehicleHeading(shortestRotation(lastHeading, snapshot.heading));
+    lastHeading = snapshot.heading;
   }
 
   if (!hasCenteredOnVehicle) {
@@ -381,10 +449,35 @@ function renderRoute(snapshot) {
 }
 
 function updateEtaAndProgress(snapshot) {
-  etaTargetMs = Date.now() + snapshot.etaRemainingSeconds * 1000;
+  // Location snapshots give the most precise remaining time (server-computed), so they
+  // take priority over the coarser delivery.eta-derived target set by setEtaCountdownTarget.
+  setEtaCountdownTarget(Date.now() + snapshot.etaRemainingSeconds * 1000);
   const progressPercent = Math.round(snapshot.progress * 100);
   mapEl.progressFill.style.width = `${progressPercent}%`;
+}
+
+/**
+ * Drives the persistent ETA countdown shown on BOTH the delivery detail page and the live
+ * map (single shared timer/state so they never disagree). Called as soon as we know a
+ * delivery's `eta` from the main lookup response — it does not wait for the first location
+ * simulator tick, so the countdown is visible immediately once a delivery is "out for
+ * delivery," even before the map/route data has loaded.
+ */
+function setEtaCountdownTarget(targetMs) {
+  etaTargetMs = targetMs;
+  el.etaCountdownLabel.hidden = false;
+  el.etaCountdownDetail.hidden = false;
   tickEtaCountdown();
+}
+
+function hideEtaCountdown() {
+  etaTargetMs = null;
+  el.etaCountdownLabel.hidden = true;
+  el.etaCountdownDetail.hidden = true;
+  if (etaCountdownTimer) {
+    clearInterval(etaCountdownTimer);
+    etaCountdownTimer = null;
+  }
 }
 
 function tickEtaCountdown() {
@@ -393,7 +486,9 @@ function tickEtaCountdown() {
   const render = () => {
     if (etaTargetMs === null) return;
     const remainingSeconds = Math.max(0, Math.round((etaTargetMs - Date.now()) / 1000));
-    mapEl.etaCountdown.textContent = formatCountdown(remainingSeconds);
+    const formatted = formatCountdown(remainingSeconds);
+    mapEl.etaCountdown.textContent = formatted;
+    el.etaCountdownDetail.textContent = formatted;
   };
 
   render();
@@ -408,12 +503,12 @@ function formatCountdown(totalSeconds) {
 }
 
 function hideMap() {
+  // Deliberately does NOT touch the ETA countdown — the countdown is driven independently
+  // from delivery.eta in renderDelivery() and should keep counting down even if the map
+  // itself isn't ready yet (e.g., the backend's road-route lookup is still in flight right
+  // after a delivery becomes "out for delivery") or the delivery has no map data at all.
   mapEl.section.hidden = true;
   latestSnapshot = null;
-  if (etaCountdownTimer) {
-    clearInterval(etaCountdownTimer);
-    etaCountdownTimer = null;
-  }
 }
 
 function updateDriverCard(delivery) {
@@ -450,6 +545,7 @@ function resetMapForNewLookup() {
   originMarker = null;
   destinationMarker = null;
   etaTargetMs = null;
+  lastHeading = 0;
 }
 
 async function loadHistoryTimeline(trackingNumber) {

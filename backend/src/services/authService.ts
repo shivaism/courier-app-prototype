@@ -89,6 +89,17 @@ export class AuthService {
     }
   }
 
+  /** Drivers are rechecked on every protected request so deactivation revokes existing JWTs. */
+  isActorActive(payload: AuthTokenPayload): boolean {
+    if (payload.actorType === "driver") {
+      return this.masterData.getDriverById(payload.actorId)?.active === true;
+    }
+    if (payload.actorType === "admin") {
+      return this.getAdminById(payload.actorId) !== null;
+    }
+    return false;
+  }
+
   createAdminUser(username: string, passwordHash: string): AdminUser {
     const result = this.db
       .prepare(`INSERT INTO admin_users (username, passwordHash) VALUES (?, ?)`)
